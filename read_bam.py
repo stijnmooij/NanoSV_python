@@ -3,7 +3,6 @@ import os
 import sys
 import textwrap
 import time
-import json
 
 from collections import defaultdict
 
@@ -138,7 +137,6 @@ def parse_svs():
         if structural_variants[sv_id].SVcluster > opts.cluster: structural_variants[sv_id].filter.append("SVcluster")
         if structural_variants[sv_id].info['GAP'] > opts.gap and structural_variants[sv_id].info['SVTYPE'] != "INS":
             structural_variants[sv_id].filter.append("GAP")
-        print(type(structural_variants[sv_id].info['MAPQ']))
         if re.match("/(\d+),(\d+)/", structural_variants[sv_id].info['MAPQ']):
             ma = re.search("/(\d+),(\d+)/", )
             print(ma.group(1), opts.mapqf)
@@ -157,9 +155,39 @@ def parse_svs():
             structural_variants[sv_id].info['GAP']
         structural_variants[sv_id].printVCF()
 
+def addSVInfo(sv):
+    if sum(sv.format['DV']) >= opts.count * 2:
+        for flag in [sv.flag1-1, sv.flag2+1]:
+
+            if flag == -1 or flag == 17: head_tail = 'T'
+            if flag == 15 or flag == 1: head_tail = 'H'
+
+            for hanging_pos in sorted(hanging_breakpoints_region[sv.chr][head_tail]):
+                if hanging_pos < (min(sv.pos) - opts.distance):
+                    continue
+                if hanging_pos > (max(sv.pos) + opts.distance):
+                    break
+                for hanging_id in hanging_breakpoints_region[sv.chr][head_tail][hanging_pos]:
+                    segment_id = hanging_breakpoints_region[sv.chr][head_tail][hanging_pos][hanging_id]
+                    if segment_id == 0: continue
+                    sv.format['HR'][0] += 1
+                    sv.format['VO'][0] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
+                    sv.addInfoField("PID", [[segments[segment_id].pid], None])
+                    sv.addInfoField("MAPQ", [[segments[segment_id].mapq], None])
+                    sv.addInfoField("PLENGTH", [[segments[segment_id].plength], None])
+                    sv.addInfoField("RLENGTH", [reads[segments[segment_id].qname].length])
+                    if re.match("/2D_2d$/", segments[segment_id].qname):
+                        sv.addInfoField("RT", ["2d"])
+                    elif re.match("/2D_complement$/", segments[segment_id].qname):
+                        sv.addInfoField("RT", ["complement"])
+                    else:
+                        sv.addInfoField("RT", ["template"])
+        structural_variants[sv.id] = sv
+        structural_variants_region[sv.chr][min(sv.pos)][max(sv.pos)][sv.id] = 0
+        structural_variants_region[sv.chr2][min(sv.info['END'])][max(sv.info['END'])][sv.id] = 1
+        structural_variants_region_2[sv.chr][sv.id] = 1
 
 def parse_breakpoints_2(breakpoints_region_2):
-    prev_pos_1 = -1
     prev_pos_2 = -1
     global svID
     for pos_2 in sorted(breakpoints_region_2):
@@ -172,95 +200,96 @@ def parse_breakpoints_2(breakpoints_region_2):
                 elif abs(breakpoint.segment_2["pos"] - prev_pos_2) <= opts.distance:
                     sv.addBreakpoint(breakpoint)
                 else:
-                    if sum(sv.format['DV']) >= opts.count * 2:
-                        if sv.flag1 == 16:
-                            for hanging_pos in sorted(hanging_breakpoints_region[sv.chr]['H']):
-                                if hanging_pos < (min(sv.pos) - opts.distance):
-                                    continue
-                                if hanging_pos > (max(sv.pos) + opts.distance):
-                                    break
-                                for hanging_id in hanging_breakpoints_region[sv.chr]['H'][hanging_pos]:
-                                    segment_id = hanging_breakpoints_region[sv.chr]['H'][hanging_pos][hanging_id]
-                                    if segment_id == 0: continue
-                                    sv.format['HR'][0] += 1
-                                    sv.format['VO'][0] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
-                                    sv.addInfoField("PID", [[segments[segment_id].pid], None])
-                                    sv.addInfoField("MAPQ", [[segments[segment_id].mapq], None])
-                                    sv.addInfoField("PLENGTH", [[segments[segment_id].plength], None])
-                                    sv.addInfoField("RLENGTH", [reads[segments[segment_id].qname].length])
-                                    if re.match("/2D_2d$/", segments[segment_id].qname):
-                                        sv.addInfoField("RT", ["2d"])
-                                    elif re.match("/2D_complement$/", segments[segment_id].qname):
-                                        sv.addInfoField("RT", ["complement"])
-                                    else:
-                                        sv.addInfoField("RT", ["template"])
-                        else:
-                            for hanging_pos in sorted(hanging_breakpoints_region[sv.chr]['T']):
-                                if hanging_pos < (min(sv.pos) - opts.distance):
-                                    continue
-                                if hanging_pos > (max(sv.pos) + opts.distance):
-                                    break
-                                for hanging_id in hanging_breakpoints_region[sv.chr]['T'][hanging_pos]:
-                                    segment_id = hanging_breakpoints_region[sv.chr]['T'][hanging_pos][hanging_id]
-                                    if segment_id == 0: continue
-                                    sv.format['HR'][0] += 1
-                                    sv.format['VO'][0] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
-                                    sv.addInfoField("PID", [[segments[segment_id].pid], None])
-                                    sv.addInfoField("MAPQ", [[segments[segment_id].mapq], None])
-                                    sv.addInfoField("PLENGTH", [[segments[segment_id].plength], None])
-                                    sv.addInfoField("RLENGTH", [reads[segments[segment_id].qname].length])
-                                    if re.match("/2D_2d$/", segments[segment_id].qname):
-                                        sv.addInfoField("RT", ["2d"])
-                                    elif re.match("/2D_complement$/", segments[segment_id].qname):
-                                        sv.addInfoField("RT", ["complement"])
-                                    else:
-                                        sv.addInfoField("RT", ["template"])
-                        if sv.flag2 == 16:
-                            for hanging_pos in sorted(hanging_breakpoints_region[sv.chr2]['T']):
-                                if hanging_pos < (min(sv.info['END']) - opts.distance):
-                                    continue
-                                if hanging_pos > (max(sv.info['END']) + opts.distance):
-                                    break
-                                for hanging_id in hanging_breakpoints_region[sv.chr2]['T'][hanging_pos]:
-                                    segment_id = hanging_breakpoints_region[sv.chr]['T'][hanging_pos][hanging_id]
-                                    if segment_id == 0: continue
-                                    sv.format['HR'][1] += 1
-                                    sv.format['VO'][0] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
-                                    sv.addInfoField("PID", [None, [segments[segment_id].pid]])
-                                    sv.addInfoField("MAPQ", [None, [segments[segment_id].mapq]])
-                                    sv.addInfoField("PLENGTH", [None, [segments[segment_id].plength]])
-                                    sv.addInfoField("RLENGTH", [reads[segments[segment_id].qname].length])
-                                    if re.match("/2D_2d$/", segments[segment_id].qname):
-                                        sv.addInfoField("RT", ["2d"])
-                                    elif re.match("/2D_complement$/", segments[segment_id].qname):
-                                        sv.addInfoField("RT", ["complement"])
-                                    else:
-                                        sv.addInfoField("RT", ["template"])
-                        else:
-                            for hanging_pos in sorted(hanging_breakpoints_region[sv.chr2]['H']):
-                                if hanging_pos < (min(sv.pos) - opts.distance):
-                                    continue
-                                if hanging_pos > (max(sv.pos) + opts.distance):
-                                    break
-                                for hanging_id in hanging_breakpoints_region[sv.chr2]['H'][hanging_pos]:
-                                    segment_id = hanging_breakpoints_region[sv.chr]['H'][hanging_pos][hanging_id]
-                                    if segment_id == 0: continue
-                                    sv.format['HR'][1] += 1
-                                    sv.format['VO'][1] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
-                                    sv.addInfoField("PID", [None, [segments[segment_id].pid]])
-                                    sv.addInfoField("MAPQ", [None, [segments[segment_id].mapq]])
-                                    sv.addInfoField("PLENGTH", [None, [segments[segment_id].plength]])
-                                    sv.addInfoField("RLENGTH", [reads[segments[segment_id].qname].length])
-                                    if re.match("/2D_2d$/", segments[segment_id].qname):
-                                        sv.addInfoField("RT", ["2d"])
-                                    elif re.match("/2D_complement$/", segments[segment_id].qname):
-                                        sv.addInfoField("RT", ["complement"])
-                                    else:
-                                        sv.addInfoField("RT", ["template"])
-                        structural_variants[sv.id] = sv
-                        structural_variants_region[sv.chr][min(sv.pos)][max(sv.pos)][sv.id] = 0
-                        structural_variants_region[sv.chr2][min(sv.info['END'])][max(sv.info['END'])][sv.id] = 1
-                        structural_variants_region_2[sv.chr][sv.id] = 1
+                    addSVInfo(sv)
+                    # if sum(sv.format['DV']) >= opts.count * 2:
+                    #     if sv.flag1 == 16:
+                    #         for hanging_pos in sorted(hanging_breakpoints_region[sv.chr]['H']):
+                    #             if hanging_pos < (min(sv.pos) - opts.distance):
+                    #                 continue
+                    #             if hanging_pos > (max(sv.pos) + opts.distance):
+                    #                 break
+                    #             for hanging_id in hanging_breakpoints_region[sv.chr]['H'][hanging_pos]:
+                    #                 segment_id = hanging_breakpoints_region[sv.chr]['H'][hanging_pos][hanging_id]
+                    #                 if segment_id == 0: continue
+                    #                 sv.format['HR'][0] += 1
+                    #                 sv.format['VO'][0] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
+                    #                 sv.addInfoField("PID", [[segments[segment_id].pid], None])
+                    #                 sv.addInfoField("MAPQ", [[segments[segment_id].mapq], None])
+                    #                 sv.addInfoField("PLENGTH", [[segments[segment_id].plength], None])
+                    #                 sv.addInfoField("RLENGTH", [reads[segments[segment_id].qname].length])
+                    #                 if re.match("/2D_2d$/", segments[segment_id].qname):
+                    #                     sv.addInfoField("RT", ["2d"])
+                    #                 elif re.match("/2D_complement$/", segments[segment_id].qname):
+                    #                     sv.addInfoField("RT", ["complement"])
+                    #                 else:
+                    #                     sv.addInfoField("RT", ["template"])
+                    #     else:
+                    #         for hanging_pos in sorted(hanging_breakpoints_region[sv.chr]['T']):
+                    #             if hanging_pos < (min(sv.pos) - opts.distance):
+                    #                 continue
+                    #             if hanging_pos > (max(sv.pos) + opts.distance):
+                    #                 break
+                    #             for hanging_id in hanging_breakpoints_region[sv.chr]['T'][hanging_pos]:
+                    #                 segment_id = hanging_breakpoints_region[sv.chr]['T'][hanging_pos][hanging_id]
+                    #                 if segment_id == 0: continue
+                    #                 sv.format['HR'][0] += 1
+                    #                 sv.format['VO'][0] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
+                    #                 sv.addInfoField("PID", [[segments[segment_id].pid], None])
+                    #                 sv.addInfoField("MAPQ", [[segments[segment_id].mapq], None])
+                    #                 sv.addInfoField("PLENGTH", [[segments[segment_id].plength], None])
+                    #                 sv.addInfoField("RLENGTH", [reads[segments[segment_id].qname].length])
+                    #                 if re.match("/2D_2d$/", segments[segment_id].qname):
+                    #                     sv.addInfoField("RT", ["2d"])
+                    #                 elif re.match("/2D_complement$/", segments[segment_id].qname):
+                    #                     sv.addInfoField("RT", ["complement"])
+                    #                 else:
+                    #                     sv.addInfoField("RT", ["template"])
+                    #     if sv.flag2 == 16:
+                    #         for hanging_pos in sorted(hanging_breakpoints_region[sv.chr2]['T']):
+                    #             if hanging_pos < (min(sv.info['END']) - opts.distance):
+                    #                 continue
+                    #             if hanging_pos > (max(sv.info['END']) + opts.distance):
+                    #                 break
+                    #             for hanging_id in hanging_breakpoints_region[sv.chr2]['T'][hanging_pos]:
+                    #                 segment_id = hanging_breakpoints_region[sv.chr]['T'][hanging_pos][hanging_id]
+                    #                 if segment_id == 0: continue
+                    #                 sv.format['HR'][1] += 1
+                    #                 sv.format['VO'][0] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
+                    #                 sv.addInfoField("PID", [None, [segments[segment_id].pid]])
+                    #                 sv.addInfoField("MAPQ", [None, [segments[segment_id].mapq]])
+                    #                 sv.addInfoField("PLENGTH", [None, [segments[segment_id].plength]])
+                    #                 sv.addInfoField("RLENGTH", [reads[segments[segment_id].qname].length])
+                    #                 if re.match("/2D_2d$/", segments[segment_id].qname):
+                    #                     sv.addInfoField("RT", ["2d"])
+                    #                 elif re.match("/2D_complement$/", segments[segment_id].qname):
+                    #                     sv.addInfoField("RT", ["complement"])
+                    #                 else:
+                    #                     sv.addInfoField("RT", ["template"])
+                    #     else:
+                    #         for hanging_pos in sorted(hanging_breakpoints_region[sv.chr2]['H']):
+                    #             if hanging_pos < (min(sv.pos) - opts.distance):
+                    #                 continue
+                    #             if hanging_pos > (max(sv.pos) + opts.distance):
+                    #                 break
+                    #             for hanging_id in hanging_breakpoints_region[sv.chr2]['H'][hanging_pos]:
+                    #                 segment_id = hanging_breakpoints_region[sv.chr]['H'][hanging_pos][hanging_id]
+                    #                 if segment_id == 0: continue
+                    #                 sv.format['HR'][1] += 1
+                    #                 sv.format['VO'][1] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
+                    #                 sv.addInfoField("PID", [None, [segments[segment_id].pid]])
+                    #                 sv.addInfoField("MAPQ", [None, [segments[segment_id].mapq]])
+                    #                 sv.addInfoField("PLENGTH", [None, [segments[segment_id].plength]])
+                    #                 sv.addInfoField("RLENGTH", [reads[segments[segment_id].qname].length])
+                    #                 if re.match("/2D_2d$/", segments[segment_id].qname):
+                    #                     sv.addInfoField("RT", ["2d"])
+                    #                 elif re.match("/2D_complement$/", segments[segment_id].qname):
+                    #                     sv.addInfoField("RT", ["complement"])
+                    #                 else:
+                    #                     sv.addInfoField("RT", ["template"])
+                    #     structural_variants[sv.id] = sv
+                    #     structural_variants_region[sv.chr][min(sv.pos)][max(sv.pos)][sv.id] = 0
+                    #     structural_variants_region[sv.chr2][min(sv.info['END'])][max(sv.info['END'])][sv.id] = 1
+                    #     structural_variants_region_2[sv.chr][sv.id] = 1
 
                     sv = svclass.SV(svID, breakpoint)
                     svID += 1
@@ -281,99 +310,9 @@ def parse_breakpoints_2(breakpoints_region_2):
                 else:
                     sv.addInfoField("RT", ["template"])
 
-                prev_pos_1 = breakpoint.segment_1["pos"]
                 prev_pos_2 = int(pos_2)
 
-    if sum(sv.format['DV']) >= opts.count * 2:
-        if sv.flag1 == 16:
-            for hanging_pos in sorted(hanging_breakpoints_region[sv.chr]['H']):
-                if hanging_pos < (min(sv.pos) - opts.distance):
-                    continue
-                if hanging_pos > (max(sv.pos) + opts.distance):
-                    break
-                for hanging_id in hanging_breakpoints_region[sv.chr]['H'][hanging_pos]:
-                    segment_id = hanging_breakpoints_region[sv.chr]['H'][hanging_pos][hanging_id]
-                    if segment_id == 0: continue
-                    sv.format['HR'][0] += 1
-                    sv.format['VO'][0] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
-                    sv.addInfoField("PID", [[segments[segment_id].pid], None])
-                    sv.addInfoField("MAPQ", [[segments[segment_id].mapq], None])
-                    sv.addInfoField("PLENGTH", [[segments[segment_id].plength], None])
-                    sv.addInfoField("RLENGTH", [reads[segments[segment_id].qname].length])
-                    if re.match("/2D_2d$/", segments[segment_id].qname):
-                        sv.addInfoField("RT", ["2d"])
-                    elif re.match("/2D_complement$/", segments[segment_id].qname):
-                        sv.addInfoField("RT", ["complement"])
-                    else:
-                        sv.addInfoField("RT", ["template"])
-        else:
-            for hanging_pos in sorted(hanging_breakpoints_region[sv.chr]['T']):
-                if hanging_pos < (min(sv.pos) - opts.distance):
-                    continue
-                if hanging_pos > (max(sv.pos) + opts.distance):
-                    break
-                for hanging_id in hanging_breakpoints_region[sv.chr]['T'][hanging_pos]:
-                    segment_id = hanging_breakpoints_region[sv.chr]['T'][hanging_pos][hanging_id]
-                    if segment_id == 0: continue
-                    sv.format['HR'][0] += 1
-                    sv.format['VO'][0] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
-                    sv.addInfoField("PID", [[segments[segment_id].pid], None])
-                    sv.addInfoField("MAPQ", [[segments[segment_id].mapq], None])
-                    sv.addInfoField("PLENGTH", [[segments[segment_id].plength], None])
-                    sv.addInfoField("RLENGTH", [reads[segments[segment_id].qname].length])
-                    if re.match("/2D_2d$/", segments[segment_id].qname):
-                        sv.addInfoField("RT", ["2d"])
-                    elif re.match("/2D_complement$/", segments[segment_id].qname):
-                        sv.addInfoField("RT", ["complement"])
-                    else:
-                        sv.addInfoField("RT", ["template"])
-        if sv.flag2 == 16:
-            for hanging_pos in sorted(hanging_breakpoints_region[sv.chr2]['T']):
-                if hanging_pos < (min(sv.info['END']) - opts.distance):
-                    continue
-                if hanging_pos > (max(sv.info['END']) + opts.distance):
-                    break
-                for hanging_id in hanging_breakpoints_region[sv.chr2]['T'][hanging_pos]:
-                    segment_id = hanging_breakpoints_region[sv.chr]['T'][hanging_pos][hanging_id]
-                    if segment_id == 0: continue
-                    sv.format['HR'][1] += 1
-                    sv.format['VO'][1] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
-                    sv.addInfoField("PID", [None, [segments[segment_id].pid]])
-                    sv.addInfoField("MAPQ", [None, [segments[segment_id].mapq]])
-                    sv.addInfoField("PLENGTH", [None, [segments[segment_id].plength]])
-                    sv.addInfoField("RLENGTH", [reads[segments[segment_id].qname].length])
-                    if re.match("/2D_2d$/", segments[segment_id].qname):
-                        sv.addInfoField("RT", ["2d"])
-                    elif re.match("/2D_complement$/", segments[segment_id].qname):
-                        sv.addInfoField("RT", ["complement"])
-                    else:
-                        sv.addInfoField("RT", ["template"])
-        else:
-            for hanging_pos in sorted(hanging_breakpoints_region[sv.chr2]['H']):
-                if hanging_pos < (min(sv.pos) - opts.distance):
-                    continue
-                if hanging_pos > (max(sv.pos) + opts.distance):
-                    break
-                for hanging_id in hanging_breakpoints_region[sv.chr2]['H'][hanging_pos]:
-                    segment_id = hanging_breakpoints_region[sv.chr]['H'][hanging_pos][hanging_id]
-                    if segment_id == 0: continue
-                    sv.format['HR'][1] += 1
-                    sv.format['VO'][1] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
-                    sv.addInfoField("PID", [None, [segments[segment_id].pid]])
-                    sv.addInfoField("MAPQ", [None, [segments[segment_id].mapq]])
-                    sv.addInfoField("PLENGTH", [None, [segments[segment_id].plength]])
-                    sv.addInfoField("RLENGTH", [reads[segments[segment_id].qname].length])
-                    if re.match("/2D_2d$/", segments[segment_id].qname):
-                        sv.addInfoField("RT", ["2d"])
-                    elif re.match("/2D_complement$/", segments[segment_id].qname):
-                        sv.addInfoField("RT", ["complement"])
-                    else:
-                        sv.addInfoField("RT", ["template"])
-        structural_variants[sv.id] = sv
-        structural_variants_region[sv.chr][min(sv.pos)][max(sv.pos)][sv.id] = 0
-        structural_variants_region[sv.chr2][min(sv.info['END'])][max(sv.info['END'])][sv.id] = 1
-        structural_variants_region_2[sv.chr][sv.id] = 1
-
+    addSVInfo(sv)
 
 def parse_breakpoints():
     print(time.strftime("%c") + " Busy with parsing breakpoints...")
@@ -392,7 +331,6 @@ def parse_breakpoints():
                     breakpoints_region_2[breakpoints[breakpoint_id].segment_2["pos"]][pos_1][breakpoint_id] = 1
                 prev_pos_1 = int(pos_1)
         parse_breakpoints_2(breakpoints_region_2)
-
 
 def parse_reads():
     print(time.strftime("%c") + " Busy with parsing read segments...")
@@ -446,7 +384,6 @@ def parse_reads():
 
                     hanging_breakpointID -= 1
 
-
 def parse_cigar(cigar):
     cigar_dict = dict()
     for char in list('H=DI'):
@@ -456,7 +393,6 @@ def parse_cigar(cigar):
     m2 = re.findall(r"(\d+)H$", cigar)
     cigar_dict['H'] = [sum(map(int, m1)), sum(map(int, m2))]
     return cigar_dict
-
 
 def parse_bam(bam, segmentID):
     print(time.strftime("%c") + " Busy with parsing bam file...")
@@ -480,7 +416,6 @@ def parse_bam(bam, segmentID):
             read.addSegment(segment)
             segments[segmentID] = segment
             segmentID += 1
-
 
 def print_vcf_header():
     print(textwrap.dedent("""\
@@ -534,7 +469,6 @@ def print_vcf_header():
     # print("gap", opts.gap)
     # print("ci", opts.ci)
 
-
 # def check_opt():
 #     print(sys.argv[1])
 #     try:
@@ -548,7 +482,6 @@ def print_vcf_header():
 #
 # def usage(message):
 #     print(message)
-
 
 def main():
     # check_opt()
