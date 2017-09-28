@@ -90,6 +90,7 @@ class SV:
             else:
                 phred_gq = abs(-10 * log10(1 - (10 ** gt_lplist[gt_idx] / 10 ** gt_sum_log)))
 
+
             self.format['GQ'] = int(phred_gq)
             self.format['SQ'] = format(sample_qual, '.3f')
 
@@ -129,7 +130,7 @@ class SV:
     def bayes_gt(self, ref, alt, is_dup):
         # probability of seeing an alt read with true genotype of of hom_ref, het, hom_alt respectively
         if is_dup:  # specialized logic to handle non-destructive events such as duplications
-            p_alt = [1e-2, 1 / 3.0, 0.5]
+            p_alt = [1e-2, 1/3.0, 0.5]
         else:
             p_alt = [1e-3, 0.5, 0.9]
 
@@ -137,7 +138,7 @@ class SV:
         log_combo = self.log_choose(int(total), int(alt))
 
         lp_homref = log_combo + alt * math.log(p_alt[0], 10) + ref * math.log(1 - p_alt[0], 10)
-        lp_het = log_combo + alt * math.log(p_alt[1], 10) + ref * math.log(1 - p_alt[1], 10)
+        lp_het = log_combo + (alt * math.log(p_alt[1], 10)) + (ref * math.log(1 - p_alt[1], 10))
         lp_homalt = log_combo + alt * math.log(p_alt[2], 10) + ref * math.log(1 - p_alt[2], 10)
 
         return [lp_homref, lp_het, lp_homalt]
@@ -187,16 +188,14 @@ class SV:
             print(";", field, "=", self.info[field], end='')
         print("\t", 'GT', end='')
         values = []
-        # print(self.format, "fiiiellldd")
         for field in self.format:
             if field == 'GT':
                 continue
-            if not re.match("/DR|DV|HR|SQ|GQ/", field):
+            if not re.match("/DR|DV|HR|SQ|GQ/", field) and not re.match("/DV|HR|DR|GQ|SQ/", field):
                 continue
             print(":", field, end='')
             value = self.format[field]
             if isinstance(value, list):
-                # print(self.format[field], end='')
                 value = ",".join(map(str, self.format[field]))
-            values.append(value)
+            values.append(str(value))
         print("\t", self.format['GT'], ":", ":".join(values), "\n")
