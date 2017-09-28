@@ -138,8 +138,10 @@ def parse_svs():
         if structural_variants[sv_id].SVcluster > opts.cluster: structural_variants[sv_id].filter.append("SVcluster")
         if structural_variants[sv_id].info['GAP'] > opts.gap and structural_variants[sv_id].info['SVTYPE'] != "INS":
             structural_variants[sv_id].filter.append("GAP")
+        print(type(structural_variants[sv_id].info['MAPQ']))
         if re.match("/(\d+),(\d+)/", structural_variants[sv_id].info['MAPQ']):
             ma = re.search("/(\d+),(\d+)/", )
+            print(ma.group(1), opts.mapqf)
             if ma.group(1) < opts.mapqf or ma.group(2) < opts.mapqf: structural_variants[sv_id].filter = "MapQual"
         if re.match("/(\d.\d+),(\d.\d+)/", structural_variants[sv_id].info['PID']):
             ma = re.search("/(\d.\d+),(\d.\d+)/", )
