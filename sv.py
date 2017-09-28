@@ -2,6 +2,7 @@
 
 from statistics import median
 from math import log10
+from math import floor
 
 import math
 import re
@@ -10,25 +11,25 @@ import re
 class SV:
     def __init__(self, id, breakpoint):
         self.id = id
-        self.chr = breakpoint.segment_1.rname
-        self.chr2 = breakpoint.segment_2.rname
-        self.flag1 = breakpoint.segment_1.flag
-        self.flag2 = breakpoint.segment_2.flag
-        self.pos = [breakpoint.segment_1.pos]
+        self.chr = breakpoint.segment_1["rname"]
+        self.chr2 = breakpoint.segment_2["rname"]
+        self.flag1 = breakpoint.segment_1["flag"]
+        self.flag2 = breakpoint.segment_2["flag"]
+        self.pos = [breakpoint.segment_1["pos"]]
         self.ref = 'N'
         self.alt = "<" + str(breakpoint.svtype) + ">"
         self.qual = '.'
         self.filter = ['PASS']
         self.info = {
             'PRECISE': "IMPRECISE",
-            'END': [breakpoint.segment_2.pos],
+            'END': [breakpoint.segment_2["pos"]],
             'SVTYPE': breakpoint.svtype,
             'SVMETHOD': 'nanosv',
         }
         self.format = {
             'GT': './.',
             'DV': [1, 1],
-            'VO': [(1 - 10 ** (breakpoint.segment_1.mapq / 10.0)), (1 - 10 ** (breakpoint.segment_2.mapq / 10.0))],
+            'VO': [(1 - 10 ** (-breakpoint.segment_1["mapq"] / 10.0)), (1 - 10 ** (-breakpoint.segment_2["mapq"] / 10.0))],
             'DR': [0, 0],
             'RO': [0, 0],
             'HR': [0, 0]
@@ -38,32 +39,25 @@ class SV:
 
     def addBreakpoint(self, breakpoint):
         self.breakpoints.append(breakpoint.id)
-        self.pos.append(breakpoint.segment_1.pos)
-        self.info['END'].append(breakpoint.segment_2.pos)
+        self.pos.append(breakpoint.segment_1["pos"])
+        self.info['END'].append(breakpoint.segment_2["pos"])
         self.format['DV'][0] += 1
         self.format['DV'][1] += 1
-        self.format['VO'][0] += (1 - 10 ** (-breakpoint.segment_1.mapq / 10.0))
-        self.format['VO'][1] += (1 - 10 ** (-breakpoint.segment_2.mapq / 10.0))
+        self.format['VO'][0] += (1 - 10 ** (-breakpoint.segment_1["mapq"] / 10.0))
+        self.format['VO'][1] += (1 - 10 ** (-breakpoint.segment_2["mapq"] / 10.0))
 
     def addInfoField(self, key, value):
         if key in self.info:
             if isinstance(self.info[key], list):
                 try:
-                    if isinstance(self.info[key][0], list) or isinstance(self.info[key][1]):
-                        try:
-                            self.info[key][0].append(value[0][0])
-                            self.info[key][1].append(value[1][0])
-                        except IndexError:
-                            ""
-                        try:
-                            self.info[key][1].append(value[1][0])
-                            self.info[key][0].append(value[0][0])
-                        except IndexError:
-                            ""
+                    if isinstance(self.info[key][0], list) or isinstance(self.info[key][1], list):
+                        if value[0] is not None: self.info[key][0].append(value[0][0])
+                        if value[1] is not None: self.info[key][1].append(value[1][0])
                     else:
                         self.info[key].append(value[0])
+
                 except IndexError:
-                    ""
+                    self.info[key].append(value[0])
         else:
             self.info[key] = value
 
@@ -85,23 +79,17 @@ class SV:
 
         gt_sum = 0
         for gt in gt_lplist:
-            try:
-                gt_sum += 10 ** int(gt)
-            except OverflowError:
-                gt_sum += 0
+            gt_sum += 10 ** int(gt)
 
         if (gt_sum > 0):
             gt_sum_log = log10(gt_sum)
             sample_qual = abs(-10 * (gt_lplist[0] - gt_sum_log))
-            phred_gq = -1
-            try:
-                if 1 - (10**gt_lplist[gt_idx] / 10**gt_sum_log) == 0:
-                    phred_gq = 200
-            except OverflowError:
-                try:
-                    phred_gq = abs(-10 * log10(1 - (10**gt_lplist[gt_idx] / 10**gt_sum_log)))
-                except OverflowError:
-                    phred_gq= 999
+
+            if 1 - (10 ** gt_lplist[gt_idx] / 10 ** gt_sum_log) == 0:
+                phred_gq = 200
+            else:
+                phred_gq = abs(-10 * log10(1 - (10 ** gt_lplist[gt_idx] / 10 ** gt_sum_log)))
+
             self.format['GQ'] = int(phred_gq)
             self.format['SQ'] = format(sample_qual, '.3f')
 
@@ -115,14 +103,14 @@ class SV:
         if self.alt == "<BND>":
             if self.flag1 == 16:
                 if self.flag2 == 16:
-                    self.alt = "]" + self.chr2 + ":" + str(self.info['END']) + "]" + self.ref
+                    self.alt = "]" + self.chr2 + ":" + str(floor(self.info['END'])) + "]" + self.ref
                 else:
-                    self.alt = "[" + self.chr2 + ":" + str(self.info['END']) + "[" + self.ref
+                    self.alt = "[" + self.chr2 + ":" + str(floor(self.info['END'])) + "[" + self.ref
             else:
                 if self.flag2 == 16:
-                    self.alt = self.ref + "]" + self.chr2 + ":" + str(self.info['END']) + "]"
+                    self.alt = self.ref + "]" + self.chr2 + ":" + str(floor(self.info['END'])) + "]"
                 else:
-                    self.alt = self.ref + "[" + self.chr2 + ":" + str(self.info['END']) + "["
+                    self.alt = self.ref + "[" + self.chr2 + ":" + str(floor(self.info['END'])) + "["
 
         self.set = 1
 
@@ -160,13 +148,19 @@ class SV:
                 rt = [0, 0, 0]
                 for type in self.info[field]:
                     if type == "2d": rt[0] += 1
-                    if type == "template": rt[0] += 1
-                    if type == "complement": rt[0] += 1
+                    if type == "template": rt[1] += 1
+                    if type == "complement": rt[2] += 1
                 self.info[field] = ",".join(map(str, rt))
             elif isinstance(self.info[field], list):
                 if isinstance(self.info[field][0], list):
                     self.info[field][0] = median(map(float, self.info[field][0]))
                     self.info[field][1] = median(map(float, self.info[field][1]))
+                    if field == "MAPQ":
+                        self.info[field][0] = int(self.info[field][0])
+                        self.info[field][1] = int(self.info[field][1])
+                    elif field == "PID" or field == "PLENGTH":
+                        self.info[field][0] = round(self.info[field][0], 3)
+                        self.info[field][1] = round(self.info[field][1], 3)
                     self.info[field] = ",".join(map(str, self.info[field]))
                 else:
                     self.info[field] = median(self.info[field])
@@ -181,7 +175,8 @@ class SV:
             self.filter = ",".join(self.filter)
             self.filter = self.filter.replace('PASS,', '')
 
-        print( self.chr, '\t', int(self.pos), '\t', self.id, '\t', self.ref, '\t', self.alt, '\t', self.qual, '\t', self.filter, '\t', self.info['PRECISE'], end='')
+        print(self.chr, '\t', int(self.pos), '\t', self.id, '\t', self.ref, '\t', self.alt, '\t', self.qual, '\t',
+              self.filter, '\t', self.info['PRECISE'], end='')
         for field in self.info:
             if field == 'PRECISE':
                 continue
@@ -192,6 +187,7 @@ class SV:
             print(";", field, "=", self.info[field], end='')
         print("\t", 'GT', end='')
         values = []
+        # print(self.format, "fiiiellldd")
         for field in self.format:
             if field == 'GT':
                 continue
@@ -200,7 +196,7 @@ class SV:
             print(":", field, end='')
             value = self.format[field]
             if isinstance(value, list):
-                print(self.format[field], end='')
+                # print(self.format[field], end='')
                 value = ",".join(map(str, self.format[field]))
             values.append(value)
         print("\t", self.format['GT'], ":", ":".join(values), "\n")
