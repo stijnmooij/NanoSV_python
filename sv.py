@@ -62,12 +62,13 @@ class SV:
             self.info[key] = value
 
     def setArguments(self):
-        self.info['CIPOS'] = str(min(self.pos) - median(self.pos)) + "," + str(max(self.pos) - median(self.pos))
-        self.info['CIEND'] = str(min(self.info['END']) - median(self.info['END'])) + "," + str(
-            max(self.info['END']) - median(self.info['END']))
+        self.info['CIPOS'] = str(int(min(self.pos) - median(self.pos))) + "," + str(int(max(self.pos) - median(self.pos)))
+        self.info['CIEND'] = str(int(min(self.info['END']) - median(self.info['END']))) + "," + str(int(
+            max(self.info['END']) - median(self.info['END'])))
+        if self.info['CIEND']: print(self.info['CIPOS'])
         if self.info['CIPOS'] == "0,0" and self.info['CIEND']: self.info['PRECISE'] = "PRECISE"
         self.pos = median(self.pos)
-        self.info['END'] = median(self.info['END'])
+        self.info['END'] = floor(median(self.info['END']))
         self.info['SVLEN'] = (self.info['END'] - self.pos)
         self.setInfoField()
 
@@ -79,7 +80,7 @@ class SV:
 
         gt_sum = 0
         for gt in gt_lplist:
-            gt_sum += 10 ** int(gt)
+            gt_sum += 10 ** gt
 
         if (gt_sum > 0):
             gt_sum_log = log10(gt_sum)
@@ -164,7 +165,7 @@ class SV:
                         self.info[field][1] = round(self.info[field][1], 3)
                     self.info[field] = ",".join(map(str, self.info[field]))
                 else:
-                    self.info[field] = median(self.info[field])
+                    self.info[field] = self.median_type(self.info[field])
 
     def setCluster(self, SVcluster):
         self.SVcluster = SVcluster
@@ -191,7 +192,7 @@ class SV:
         for field in self.format:
             if field == 'GT':
                 continue
-            if not re.match("/DR|DV|HR|SQ|GQ/", field) and not re.match("/DV|HR|DR|GQ|SQ/", field):
+            if not re.match("DR|DV|HR|SQ|GQ", field):
                 continue
             print(":", field, end='')
             value = self.format[field]
@@ -199,3 +200,9 @@ class SV:
                 value = ",".join(map(str, self.format[field]))
             values.append(str(value))
         print("\t", self.format['GT'], ":", ":".join(values), "\n")
+
+    def median_type(self, toCalculate):
+        if type(toCalculate[0]) == float:
+            return median(toCalculate)
+        elif type(toCalculate[0]) == int:
+            return int(median(toCalculate))

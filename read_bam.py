@@ -106,7 +106,7 @@ def parse_svs():
         for sv_id_2 in sorted(structural_variants_region_2[structural_variants[sv_id].chr]):
             structural_variants[sv_id].setCluster(1)
             structural_variants[sv_id_2].setCluster(1)
-            if sv_id > sv_id_2: continue
+            if sv_id_2 <= sv_id: continue
             if structural_variants[sv_id_2].set != 1: structural_variants[sv_id_2].setArguments()
             if structural_variants[sv_id].chr != structural_variants[sv_id_2].chr: continue
             if structural_variants[sv_id].chr2 != structural_variants[sv_id_2].chr2: continue
@@ -137,27 +137,27 @@ def parse_svs():
         if structural_variants[sv_id].SVcluster > opts.cluster: structural_variants[sv_id].filter.append("SVcluster")
         if structural_variants[sv_id].info['GAP'] > opts.gap and structural_variants[sv_id].info['SVTYPE'] != "INS":
             structural_variants[sv_id].filter.append("GAP")
-        if re.match("/(\d+),(\d+)/", structural_variants[sv_id].info['MAPQ']):
-            ma = re.search("/(\d+),(\d+)/", )
-            print(ma.group(1), opts.mapqf)
-            if ma.group(1) < opts.mapqf or ma.group(2) < opts.mapqf: structural_variants[sv_id].filter = "MapQual"
-        if re.match("/(\d.\d+),(\d.\d+)/", structural_variants[sv_id].info['PID']):
-            ma = re.search("/(\d.\d+),(\d.\d+)/", )
-            if ma.group(1) < opts.pidf or ma.group(2) < opts.pidf: structural_variants[sv_id].filter = "PID"
-        if re.match("/(\d+),(\d+)/", structural_variants[sv_id].info['CIPOS']):
-            ma = re.search("/(\d+),(\d+)/", )
-            if ma.group(1) > opts.ci or ma.group(2) > opts.ci: structural_variants[sv_id].filter = "CIPOS"
-        if re.match("/(\d+),(\d+)/", structural_variants[sv_id].info['CIEND']):
-            ma = re.search("/(\d+),(\d+)/", )
-            if ma.group(1) > opts.ci or ma.group(2) > opts.ci: structural_variants[sv_id].filter = "CIEND"
+        if re.match("(\d+),(\d+)", structural_variants[sv_id].info['MAPQ']):
+            ma = re.search("(\d+),(\d+)", structural_variants[sv_id].info['MAPQ'])
+            if int(ma.group(1)) < opts.mapqf or int(ma.group(2)) < opts.mapqf: structural_variants[sv_id].filter.append("MapQual")
+        if re.match("(\d.\d+),(\d.\d+)", structural_variants[sv_id].info['PID']):
+            ma = re.search("(\d.\d+),(\d.\d+)", structural_variants[sv_id].info['PID'])
+            if float(ma.group(1)) < opts.pidf or float(ma.group(2)) < opts.pidf: structural_variants[sv_id].filter.append("PID")
+        if re.match("(\d+),(\d+)", structural_variants[sv_id].info['CIPOS']):
+            ma = re.search("(\d+),(\d+)", structural_variants[sv_id].info['CIPOS'])
+            if int(ma.group(1)) > opts.ci or int(ma.group(2)) > opts.ci: structural_variants[sv_id].filter.append("CIPOS")
+        if re.match("(\d+),(\d+)", structural_variants[sv_id].info['CIEND']):
+            ma = re.search("(\d+),(\d+)", structural_variants[sv_id].info['CIEND'])
+            if ma.group(1) > opts.ci or ma.group(2) > opts.ci: structural_variants[sv_id].filter.append("CIEND")
 
         if structural_variants[sv_id].info['SVTYPE'] == 'INS': structural_variants[sv_id].info['SVLEN'] = \
             structural_variants[sv_id].info['GAP']
         structural_variants[sv_id].printVCF()
 
+
 def addSVInfo(sv):
     if sum(sv.format['DV']) >= opts.count * 2:
-        for flag in [sv.flag1-1, sv.flag2+1]:
+        for flag in [sv.flag1 - 1, sv.flag2 + 1]:
 
             if flag == -1 or flag == 17: head_tail = 'T'
             if flag == 15 or flag == 1: head_tail = 'H'
@@ -187,6 +187,7 @@ def addSVInfo(sv):
         structural_variants_region[sv.chr2][min(sv.info['END'])][max(sv.info['END'])][sv.id] = 1
         structural_variants_region_2[sv.chr][sv.id] = 1
 
+
 def parse_breakpoints_2(breakpoints_region_2):
     prev_pos_2 = -1
     global svID
@@ -206,9 +207,11 @@ def parse_breakpoints_2(breakpoints_region_2):
                     svID += 1
 
                 sv.addInfoField("PID",
-                                [[segments[breakpoint.segment_1["id"]].pid], [segments[breakpoint.segment_2["id"]].pid]])
+                                [[segments[breakpoint.segment_1["id"]].pid],
+                                 [segments[breakpoint.segment_2["id"]].pid]])
                 sv.addInfoField("MAPQ",
-                                [[segments[breakpoint.segment_1["id"]].mapq], [segments[breakpoint.segment_2["id"]].mapq]])
+                                [[segments[breakpoint.segment_1["id"]].mapq],
+                                 [segments[breakpoint.segment_2["id"]].mapq]])
                 sv.addInfoField("PLENGTH", [[segments[breakpoint.segment_1["id"]].plength],
                                             [segments[breakpoint.segment_2["id"]].plength]])
                 sv.addInfoField("RLENGTH", [reads[segments[breakpoint.segment_2["id"]].qname].length])
@@ -224,6 +227,7 @@ def parse_breakpoints_2(breakpoints_region_2):
                 prev_pos_2 = int(pos_2)
 
     addSVInfo(sv)
+
 
 def parse_breakpoints():
     print(time.strftime("%c") + " Busy with parsing breakpoints...")
@@ -242,6 +246,7 @@ def parse_breakpoints():
                     breakpoints_region_2[breakpoints[breakpoint_id].segment_2["pos"]][pos_1][breakpoint_id] = 1
                 prev_pos_1 = int(pos_1)
         parse_breakpoints_2(breakpoints_region_2)
+
 
 def parse_reads():
     print(time.strftime("%c") + " Busy with parsing read segments...")
@@ -279,21 +284,26 @@ def parse_reads():
                 hanging_breakpoint_pos = segment_1.pos
                 if segment_1.flag == 16:
                     hanging_breakpoint_pos = segment_1.end
-                    hanging_breakpoints_region[segment_1.rname]['T'][hanging_breakpoint_pos][hanging_breakpointID] = segment_1.id
+                    hanging_breakpoints_region[segment_1.rname]['T'][hanging_breakpoint_pos][
+                        hanging_breakpointID] = segment_1.id
                     hanging_breakpointID -= 1
                 else:
-                    hanging_breakpoints_region[segment_1.rname]['H'][hanging_breakpoint_pos][hanging_breakpointID] = segment_1.id
+                    hanging_breakpoints_region[segment_1.rname]['H'][hanging_breakpoint_pos][
+                        hanging_breakpointID] = segment_1.id
                     hanging_breakpointID = hanging_breakpointID - 1
             if i2 == len(clips) - 1 and segment_2.clip_2 >= opts.unmapped:
                 hanging_breakpoint_pos = segment_2.end
                 if segment_2.flag == 16:
                     hanging_breakpoint_pos = segment_2.pos
-                    hanging_breakpoints_region[segment_2.rname]['H'][hanging_breakpoint_pos][hanging_breakpointID] = segment_2.id
+                    hanging_breakpoints_region[segment_2.rname]['H'][hanging_breakpoint_pos][
+                        hanging_breakpointID] = segment_2.id
                     hanging_breakpointID -= 1
                 else:
-                    hanging_breakpoints_region[segment_2.rname]['T'][hanging_breakpoint_pos][hanging_breakpointID] = segment_2.id
+                    hanging_breakpoints_region[segment_2.rname]['T'][hanging_breakpoint_pos][
+                        hanging_breakpointID] = segment_2.id
 
                     hanging_breakpointID -= 1
+
 
 def parse_cigar(cigar):
     cigar_dict = dict()
@@ -304,6 +314,7 @@ def parse_cigar(cigar):
     m2 = re.findall(r"(\d+)H$", cigar)
     cigar_dict['H'] = [sum(map(int, m1)), sum(map(int, m2))]
     return cigar_dict
+
 
 def parse_bam(bam, segmentID):
     print(time.strftime("%c") + " Busy with parsing bam file...")
@@ -327,6 +338,7 @@ def parse_bam(bam, segmentID):
             read.addSegment(segment)
             segments[segmentID] = segment
             segmentID += 1
+
 
 def print_vcf_header():
     print(textwrap.dedent("""\
@@ -379,6 +391,7 @@ def print_vcf_header():
     # print("pidf", opts.pidf)
     # print("gap", opts.gap)
     # print("ci", opts.ci)
+
 
 # def check_opt():
 #     print(sys.argv[1])
