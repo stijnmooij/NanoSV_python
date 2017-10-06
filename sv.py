@@ -65,15 +65,27 @@ class SV:
         self.info['CIPOS'] = str(int(min(self.pos) - median(self.pos))) + "," + str(int(max(self.pos) - median(self.pos)))
         self.info['CIEND'] = str(int(min(self.info['END']) - median(self.info['END']))) + "," + str(int(
             max(self.info['END']) - median(self.info['END'])))
-        if self.info['CIEND']: print(self.info['CIPOS'])
         if self.info['CIPOS'] == "0,0" and self.info['CIEND']: self.info['PRECISE'] = "PRECISE"
         self.pos = median(self.pos)
         self.info['END'] = floor(median(self.info['END']))
         self.info['SVLEN'] = (self.info['END'] - self.pos)
         self.setInfoField()
 
+        if self.alt == "<BND>":
+            if self.flag1 == 16:
+                if self.flag2 == 16:
+                    self.alt = "]" + self.chr2 + ":" + str(floor(self.info['END'])) + "]" + self.ref
+                else:
+                    self.alt = "[" + self.chr2 + ":" + str(floor(self.info['END'])) + "[" + self.ref
+            else:
+                if self.flag2 == 16:
+                    self.alt = self.ref + "]" + self.chr2 + ":" + str(floor(self.info['END'])) + "]"
+                else:
+                    self.alt = self.ref + "[" + self.chr2 + ":" + str(floor(self.info['END'])) + "["
+
         dup = 0
-        if self.info['SVTYPE'] == "DUP": dup = 1
+        if re.match("\[(\d+):(\d+)\[\w+", self.alt):
+            dup = 1
 
         gt_lplist = self.bayes_gt(sum(self.format['RO']), sum(self.format['VO']), dup)
         gt_idx = gt_lplist.index(max(gt_lplist))
@@ -101,18 +113,6 @@ class SV:
                 self.format['GT'] = '0/1'
             elif gt_idx == 2:
                 self.format['GT'] = '1/1'
-
-        if self.alt == "<BND>":
-            if self.flag1 == 16:
-                if self.flag2 == 16:
-                    self.alt = "]" + self.chr2 + ":" + str(floor(self.info['END'])) + "]" + self.ref
-                else:
-                    self.alt = "[" + self.chr2 + ":" + str(floor(self.info['END'])) + "[" + self.ref
-            else:
-                if self.flag2 == 16:
-                    self.alt = self.ref + "]" + self.chr2 + ":" + str(floor(self.info['END'])) + "]"
-                else:
-                    self.alt = self.ref + "[" + self.chr2 + ":" + str(floor(self.info['END'])) + "["
 
         self.set = 1
 
@@ -170,15 +170,14 @@ class SV:
     def setCluster(self, SVcluster):
         self.SVcluster = SVcluster
 
-    def printVCF(self):
+    def printVCF(self, output):
         if len(self.filter) == 1:
             self.filter = "PASS"
         else:
-            self.filter = ",".join(self.filter)
-            self.filter = self.filter.replace('PASS,', '')
+            self.filter = ";".join(self.filter)
+            self.filter = self.filter.replace('PASS;', '')
 
-        print(self.chr, '\t', int(self.pos), '\t', self.id, '\t', self.ref, '\t', self.alt, '\t', self.qual, '\t',
-              self.filter, '\t', self.info['PRECISE'], end='')
+        output.write("\t".join(map(str, [self.chr, int(self.pos), self.id, self.ref, self.alt, self.qual, self.filter, self.info['PRECISE']])))
         for field in self.info:
             if field == 'PRECISE':
                 continue
@@ -186,20 +185,22 @@ class SV:
                 continue
             if field == "SVLEN" and not re.match("/^$self->{_chr2}$/", self.chr):
                 continue
-            print(";", field, "=", self.info[field], end='')
-        print("\t", 'GT', end='')
+
+            output.write(";%s=%s" % (field, self.info[field]))
+        output.write("\tGT")
         values = []
         for field in self.format:
             if field == 'GT':
                 continue
             if not re.match("DR|DV|HR|SQ|GQ", field):
                 continue
-            print(":", field, end='')
+            output.write(":%s" % (field))
             value = self.format[field]
             if isinstance(value, list):
                 value = ",".join(map(str, self.format[field]))
             values.append(str(value))
-        print("\t", self.format['GT'], ":", ":".join(values), "\n")
+        output.write("\t%s:%s\n" % (self.format['GT'], ":".join(values)))
+        return output
 
     def median_type(self, toCalculate):
         if type(toCalculate[0]) == float:
