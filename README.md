@@ -1,5 +1,8 @@
 # NanoSV_python
 
 This is the README for NanoSV.
+Usage:
 
-I'm doing my internship at the UMC Utrecht. 
+python3 read_bam.py <bam_file>  [options] '
+
+python3 read_bam.py -h for help
