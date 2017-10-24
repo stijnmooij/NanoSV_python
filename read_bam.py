@@ -6,6 +6,8 @@ import time
 
 from collections import defaultdict
 
+import datetime
+
 import read as r
 import segment as s
 import breakpoint as b
@@ -18,24 +20,24 @@ group1 = optparse.OptionGroup(parser, 'General options')
 group2 = optparse.OptionGroup(parser, 'Filter options')
 group3 = optparse.OptionGroup(parser, 'Detection options')
 group4 = optparse.OptionGroup(parser, 'Output filter options')
-group1.add_option('-t', '--threads', dest='threads', help='[i] Number of threads. Default: 8')
-group1.add_option('--sambamba', dest='sambamba', help='[s] Path to sambamba: Default: sambamba_v0.6.3')
-group2.add_option('-s', '--split', dest='split', help='[i]Maximum number of segments per read. Default: 10')
-group2.add_option('-p', '--pid', dest='pid', help='[s] Minimum percentage identity to reference. Default: 0.70')
-group2.add_option('-m', '--mapq', dest='mapq', help='[i] Minimum mapping quality. Default: 20')
-group3.add_option('-d', '--distance', dest='distance', help='[i] Maximum distance to cluster SVs together. Default: 10')
-group3.add_option('-c', '--count', dest='count', help='[i] Minimum number of supporting reads. Default: 2')
-group3.add_option('-f', '--refdistance', dest='refdistance', help='Minimum distance for reference reads: Default: 100')
-group3.add_option('-u', '--unmapped', dest='unmapped', help='[i] Minimum unmapped length of hanging segments: 20')
-group3.add_option('-r', '--matedistance', dest='matedistance',
-                  help='[i] Maximum distance to look for mateid. Default: 300')
-group4.add_option('-w', '--window', dest='window', help='[i] Maximum window size. Default: 1000')
-group4.add_option('-n', '--cluster', dest='cluster', help='[i] Maximum number of SVs in a window. Default: 2')
-group4.add_option('-q', '--mapqf', dest='mapqf', help='Minimum median mapping quality of a SV. Default: 80')
-group4.add_option('-i', '--pidf', dest='pidf',
-                  help='[s] Minimum median percentage identity to reference. Default: 0.80')
-group4.add_option('-g', '--gap', dest='gap', help='[i] Maximum median gap size. Default: 100')
-group4.add_option('-y', '--ci', dest='ci', help='[i] Maximum Confidence interval distance. Default: 20')
+group1.add_option('-t', '--threads', dest='threads', help='[i] Number of threads. Default: 8', default=8)
+group1.add_option('--sambamba', dest='sambamba', help='[s] Path to sambamba: Default: sambamba_v0.6.3', default="/data/sambamba_v0.6.3")
+group2.add_option('-s', '--split', dest='split', help='[i]Maximum number of segments per read. Default: 10', default=10)
+group2.add_option('-p', '--pid', dest='pid', help='[s] Minimum percentage identity to reference. Default: 0.70', default=0.70)
+group2.add_option('-m', '--mapq', dest='mapq', help='[i] Minimum mapping quality. Default: 20', default=20)
+group3.add_option('-d', '--distance', dest='distance', help='[i] Maximum distance to cluster SVs together. Default: 10', default=10)
+group3.add_option('-c', '--count', dest='count', help='[i] Minimum number of supporting reads. Default: 2', default=2)
+group3.add_option('-f', '--refdistance', dest='refdistance', help='Minimum distance for reference reads: Default: 100', default=100)
+group3.add_option('-u', '--unmapped', dest='unmapped', help='[i] Minimum unmapped length of hanging segments: 20', default=20)
+group3.add_option('-r', '--matedistance', dest='matedistance', help='[i] Maximum distance to look for mateid. Default: 300', default=300)
+group4.add_option('-w', '--window', dest='window', help='[i] Maximum window size. Default: 1000', default=1000)
+group4.add_option('-n', '--cluster', dest='cluster', help='[i] Maximum number of SVs in a window. Default: 2', default=2)
+group4.add_option('-q', '--mapqf', dest='mapqf', help='Minimum median mapping quality of a SV. Default: 80', default=80)
+group4.add_option('-i', '--pidf', dest='pidf', help='[s] Minimum median percentage identity to reference. Default: 0.80', default=0.80)
+group4.add_option('-g', '--gap', dest='gap', help='[i] Maximum median gap size. Default: 100', default=100)
+group4.add_option('-y', '--ci', dest='ci', help='[i] Maximum Confidence interval distance. Default: 20', default=20)
+group4.add_option('-o', '--output', dest='output', help='Name of output vcf file', default="structural_variation.vcf")
+
 parser.add_option_group(group1)
 parser.add_option_group(group2)
 parser.add_option_group(group3)
@@ -43,23 +45,6 @@ parser.add_option_group(group4)
 (opts, args) = parser.parse_args()
 
 bam = sys.argv[1]
-
-opts.threads = 8
-opts.sambamba = '/data/sambamba_v0.6.3'
-opts.split = 10
-opts.pid = 0.70
-opts.mapq = 20
-opts.distance = 10
-opts.count = 2
-opts.refdistance = 100
-opts.unmapped = 20
-opts.matedistance = 300
-opts.window = 1000
-opts.cluster = 2
-opts.mapqf = 80
-opts.pidf = 0.80
-opts.gap = 100
-opts.ci = 20
 
 reads = {}
 segments = {}
@@ -69,6 +54,7 @@ hanging_breakpoints_region = defaultdict(lambda: defaultdict(lambda: defaultdict
 structural_variants = {}
 structural_variants_region = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(int))))
 structural_variants_region_2 = defaultdict(lambda: defaultdict(int))
+output = open(opts.output, "w")
 
 aantal_svs = 0
 svID = 1
@@ -76,8 +62,8 @@ segmentID = 1
 
 
 def parse_svs():
-    global aantal_svs
-    print(time.strftime("%c") + " Busy with reference reads...")
+    global aantal_svs, output
+    sys.stderr.write(time.strftime("%c") + " Busy with reference reads...\n")
     prev_rname = 0
     for segment_id in sorted(segments):
         if segments[segment_id].rname != prev_rname and prev_rname != 0:
@@ -99,7 +85,7 @@ def parse_svs():
                         structural_variants[sv_id].format['RO'][x] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
         prev_rname = segments[segment_id].rname
 
-    print(time.strftime("%c") + " Busy with printing to vcf...")
+    sys.stderr.write(time.strftime("%c") + " Busy with printing to vcf...\n")
     for sv_id in sorted(structural_variants):
         aantal_svs += 1
         if structural_variants[sv_id].set != 1: structural_variants[sv_id].setArguments()
@@ -117,18 +103,23 @@ def parse_svs():
                 structural_variants[sv_id_2].SVcluster += 1
             if structural_variants[sv_id_2].info['SVTYPE'] != "BND": continue
             if structural_variants[sv_id].info['SVTYPE'] != "BND": continue
-            if re.match("/\](\w+):(\d+)\]\w+/", structural_variants[sv_id].alt) and not re.match("/\w+\[(\w+):(\d+)\[/",
+            if re.match("\](\w+):(\d+)\]\w+", structural_variants[sv_id].alt) and not re.match("\w+\[(\w+):(\d+)\[",
                                                                                                  structural_variants[
-                                                                                                     sv_id_2].alt): continue
-            if re.match("/\[(\w+):(\d+)\[\w+/", structural_variants[sv_id].alt) and not re.match("/\w+\](\w+):(\d+)\]/",
+                                                                                                     sv_id_2].alt):
+                continue
+            if re.match("\[(\w+):(\d+)\[\w+", structural_variants[sv_id].alt) and not re.match("\w+\](\w+):(\d+)\]",
                                                                                                  structural_variants[
-                                                                                                     sv_id_2].alt): continue
-            if re.match("/\w+\](\w+):(\d+)\]/", structural_variants[sv_id].alt) and not re.match("/\[(\w+):(\d+)\[\w+/",
+                                                                                                     sv_id_2].alt):
+                continue
+            if re.match("\w+\](\w+):(\d+)\]", structural_variants[sv_id].alt) and not re.match("\[(\w+):(\d+)\[\w+",
                                                                                                  structural_variants[
-                                                                                                     sv_id_2].alt): continue
-            if re.match("/\w+\[(\w+):(\d+)\[/", structural_variants[sv_id].alt) and not re.match("/\](\w+):(\d+)\]\w+/",
+                                                                                                     sv_id_2].alt):
+                continue
+            if re.match("\w+\[(\w+):(\d+)\[", structural_variants[sv_id].alt) and not re.match("\](\w+):(\d+)\]\w+",
                                                                                                  structural_variants[
-                                                                                                     sv_id_2].alt): continue
+                                                                                                     sv_id_2].alt):
+                continue
+
             if abs(structural_variants[sv_id].pos - structural_variants[sv_id_2].pos) > opts.matedistance: continue
             if abs(structural_variants[sv_id].info['END'] - structural_variants[sv_id_2].info[
                 'END']) > opts.matedistance: continue
@@ -148,11 +139,12 @@ def parse_svs():
             if int(ma.group(1)) > opts.ci or int(ma.group(2)) > opts.ci: structural_variants[sv_id].filter.append("CIPOS")
         if re.match("(\d+),(\d+)", structural_variants[sv_id].info['CIEND']):
             ma = re.search("(\d+),(\d+)", structural_variants[sv_id].info['CIEND'])
-            if ma.group(1) > opts.ci or ma.group(2) > opts.ci: structural_variants[sv_id].filter.append("CIEND")
+            if int(ma.group(1)) > opts.ci or int(ma.group(2)) > opts.ci: structural_variants[sv_id].filter.append("CIEND")
 
         if structural_variants[sv_id].info['SVTYPE'] == 'INS': structural_variants[sv_id].info['SVLEN'] = \
             structural_variants[sv_id].info['GAP']
-        structural_variants[sv_id].printVCF()
+        new_output = structural_variants[sv_id].printVCF(output)
+        output = new_output
 
 
 def addSVInfo(sv):
@@ -230,7 +222,7 @@ def parse_breakpoints_2(breakpoints_region_2):
 
 
 def parse_breakpoints():
-    print(time.strftime("%c") + " Busy with parsing breakpoints...")
+    sys.stderr.write(time.strftime("%c") + " Busy with parsing breakpoints...\n")
     for region in breakpoints_region:
         prev_pos_1 = -1
         breakpoints_region_2 = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
@@ -249,7 +241,7 @@ def parse_breakpoints():
 
 
 def parse_reads():
-    print(time.strftime("%c") + " Busy with parsing read segments...")
+    sys.stderr.write(time.strftime("%c") + " Busy with parsing read segments...\n")
     breakpointID = 1
     hanging_breakpointID = -1
     for qname in reads:
@@ -317,7 +309,7 @@ def parse_cigar(cigar):
 
 
 def parse_bam(bam, segmentID):
-    print(time.strftime("%c") + " Busy with parsing bam file...")
+    sys.stderr.write(time.strftime("%c") + " Busy with parsing bam file...\n")
 
     with os.popen(opts.sambamba + ' view -t ' + str(opts.threads) + ' ' + bam) as bam:
         for line in bam:
@@ -341,9 +333,9 @@ def parse_bam(bam, segmentID):
 
 
 def print_vcf_header():
-    print(textwrap.dedent("""\
-                ##fileformat=VCFv4.1
-##fileDate=$date
+    output.write(textwrap.dedent("""\
+##fileformat=VCFv4.1
+##fileDate=""" + str(time.strftime("%c")) + """
 ##ALT=<ID=DEL,Description="Deletion">
 ##ALT=<ID=DUP,Description="Duplication">
 ##ALT=<ID=BND,Description="Breakend">
@@ -363,18 +355,18 @@ def print_vcf_header():
 ##INFO=<ID=PLENGTH,Number=2,Type=Float,Description="Median segment length percentage of the two segments of the structural variant">
 ##INFO=<ID=RLENGTH,Number=1,Type=Integer,Description="Median length of the total reads">
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
-##FORMAT=<ID=DR,Number=1,Type=Integer,Description="Number of reference reads">
-##FORMAT=<ID=DV,Number=1,Type=Integer,Description="Number of variant reads">
+##FORMAT=<ID=DR,Number=2,Type=Integer,Description="Number of reference reads">
+##FORMAT=<ID=DV,Number=2,Type=Integer,Description="Number of variant reads">
 ##FORMAT=<ID=SQ,Number=1,Type=Float,Description="Phred-scaled probability that this site is variant (non-reference in this sample)">
 ##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
 ##FORMAT=<ID=HR,Number=2,Type=Integer,Description="Number of hanging variant reads">
-##FILTER=<ID=SVcluster,Description="There are more than $opt{cluster} SVs in a window of $opt{window} on both sides">
-##FILTER=<ID=GAP,Description="The median gap size is larger than $opt{gap} for non insertions">
-##FILTER=<ID=MapQual,Description="The median mapping quality is less than $opt{mapqf}">
-##FILTER=<ID=PID,Description="The PID of one of the segments is less than $opt{pidf}">
-##FILTER=<ID=CIPOS,Description="The CIPOS is greater or less than $opt{ci}">
-##FILTER=<ID=CIEND,Description="The CIEND is greater or less than $opt{ci}">"""))
-    print("\t".join(['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT']))
+##FILTER=<ID=SVcluster,Description="There are more than """ + str(opts.cluster) + """ SVs in a window of """ + str(opts.window) + """ on both sides">
+##FILTER=<ID=GAP,Description="The median gap size is larger than """ + str(opts.gap) + """ for non insertions">
+##FILTER=<ID=MapQual,Description="The median mapping quality is less than """ + str(opts.mapqf) + """">
+##FILTER=<ID=PID,Description="The PID of one of the segments is less than """ + str(opts.pidf) + """">
+##FILTER=<ID=CIPOS,Description="The CIPOS is greater or less than """ + str(opts.ci) + """">
+##FILTER=<ID=CIEND,Description="The CIEND is greater or less than """ + str(opts.ci) + """">\n"""))
+    output.write("\t".join(['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', "4596TP", "\n"]))
     # print("threads", opts.threads)
     # print("sambamba", opts.sambamba)
     # print("split", opts.split)
@@ -410,11 +402,13 @@ def print_vcf_header():
 def main():
     # check_opt()
     print_vcf_header()
+    print(opts.output)
     parse_bam(bam, segmentID);
     parse_reads()
     parse_breakpoints()
     parse_svs()
-    print(time.strftime("%c") + " Done")
+    output.close()
+    sys.stderr.write(time.strftime("%c") + " Done\n")
 
 
 if __name__ == '__main__':
