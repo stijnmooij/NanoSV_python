@@ -4,12 +4,18 @@ from statistics import median
 from math import log10
 from math import floor
 
+
 import math
 import re
 
+import os
+
 
 class SV:
-    def __init__(self, id, breakpoint):
+    def __init__(self, id, breakpoint, bam, sambamba, avg_sample_coverage):
+        self.bam = bam
+        self.sambamba = sambamba
+        self.avg_sample_coverage = avg_sample_coverage
         self.id = id
         self.chr = breakpoint.segment_1["rname"]
         self.chr2 = breakpoint.segment_2["rname"]
@@ -61,6 +67,22 @@ class SV:
         else:
             self.info[key] = value
 
+    def significanceTest(self, avg_dupdel_cov, dup):
+        teller = 0
+        if dup:
+            for value in self.avg_sample_coverage:
+                if float(value) > avg_dupdel_cov:
+                    teller += 1
+        else:
+            for value in self.avg_sample_coverage:
+                if float(value) < avg_dupdel_cov:
+                    teller += 1
+        print(teller, "teller", teller/1000000, "fractie")
+        if teller/len(self.avg_sample_coverage) < 0.05:
+            return True
+        else:
+            return False
+
     def setArguments(self):
         self.info['CIPOS'] = str(int(min(self.pos) - median(self.pos))) + "," + str(int(max(self.pos) - median(self.pos)))
         self.info['CIEND'] = str(int(min(self.info['END']) - median(self.info['END']))) + "," + str(int(
@@ -71,10 +93,15 @@ class SV:
         self.info['SVLEN'] = (self.info['END'] - self.pos)
         self.setInfoField()
 
+        dup = 0
         if self.alt == "<BND>":
             if self.flag1 == 16:
                 if self.flag2 == 16:
                     self.alt = "]" + self.chr2 + ":" + str(floor(self.info['END'])) + "]" + self.ref
+                    avg_dupdel_cov = self.getDupDelcoverage()
+                    if self.significanceTest(avg_dupdel_cov, True):
+                    self.alt = "<DUP>"
+                    dup = 1
                 else:
                     self.alt = "[" + self.chr2 + ":" + str(floor(self.info['END'])) + "[" + self.ref
             else:
@@ -82,11 +109,9 @@ class SV:
                     self.alt = self.ref + "]" + self.chr2 + ":" + str(floor(self.info['END'])) + "]"
                 else:
                     self.alt = self.ref + "[" + self.chr2 + ":" + str(floor(self.info['END'])) + "["
-
-        dup = 0
-        if re.match("\[(\d+):(\d+)\[\w+", self.alt):
-            dup = 1
-
+                    avg_dupdel_cov = self.getDupDelcoverage()
+                    if self.significanceTest(avg_dupdel_cov, False):
+                    self.alt = "<DEL>"
         gt_lplist = self.bayes_gt(sum(self.format['RO']), sum(self.format['VO']), dup)
         gt_idx = gt_lplist.index(max(gt_lplist))
 
@@ -115,6 +140,20 @@ class SV:
                 self.format['GT'] = '1/1'
 
         self.set = 1
+
+    def getDupDelcoverage(self):
+        start = round(self.pos)
+        stop = round(self.info['END'])
+        if start > stop:
+            start = round(self.info['END'])
+            stop = round(self.pos)
+        position = str(self.chr) + ":" + str(start) + "-" + str(stop)
+        dupdel_coverages = []
+        with os.popen(self.sambamba + " depth base " + self.bam + " -L " + position + " | awk '{if (NR!=1) print $3 }'") as commandoutput:
+            for line in commandoutput:
+                dupdel_coverages.append(float(line.rstrip()))
+        print(sum(dupdel_coverages), len(dupdel_coverages))
+        return float(sum(dupdel_coverages))/len(dupdel_coverages)
 
     def log_choose(self, n, k):
         r = 0.0
