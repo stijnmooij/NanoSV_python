@@ -77,7 +77,6 @@ class SV:
             for value in self.avg_sample_coverage:
                 if float(value) < avg_dupdel_cov:
                     teller += 1
-        print(teller, "teller", teller/1000000, "fractie")
         if teller/len(self.avg_sample_coverage) < 0.05:
             return True
         else:
@@ -152,7 +151,6 @@ class SV:
         with os.popen(self.sambamba + " depth base " + self.bam + " -L " + position + " | awk '{if (NR!=1) print $3 }'") as commandoutput:
             for line in commandoutput:
                 dupdel_coverages.append(float(line.rstrip()))
-        print(sum(dupdel_coverages), len(dupdel_coverages))
         return float(sum(dupdel_coverages))/len(dupdel_coverages)
 
     def log_choose(self, n, k):

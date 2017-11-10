@@ -267,7 +267,6 @@ def parse_breakpoints_2(breakpoints_region_2):
                     sv.addBreakpoint(breakpoint)
                 else:
                     addSVInfo(sv)
-                    print(type(coverages), len(coverages))
                     sv = svclass.SV(svID, breakpoint, bam, opts.sambamba, coverages)
                     svID += 1
 
