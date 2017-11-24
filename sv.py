@@ -78,8 +78,10 @@ class SV:
                 if float(value) < avg_dupdel_cov:
                     teller += 1
         if teller/len(self.avg_sample_coverage) < 0.05:
+            self.info["PVAL"] = '%.3f'%(teller/len(self.avg_sample_coverage))
             return True
         else:
+            self.info["PVAL"] = '%.3f'%(teller/len(self.avg_sample_coverage))
             return False
 
     def setArguments(self):

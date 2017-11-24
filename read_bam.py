@@ -232,11 +232,11 @@ def calculate_coverage_bed():
                 break
         file.write(position_string + "\n")
     file.close()
-    with os.popen(
-                                            opts.sambamba + " depth base " + bam + " -L bedfile.bed " + " | awk '{if (NR!=1) print $3}'") as coverageOutput:
+    with os.popen(opts.sambamba + " depth base --min-coverage=0 " + bam + " -L bedfile.bed " + " | awk '{if (NR!=1) print $3}'") as coverageOutput:
         for coverage in coverageOutput:
-            if coverage != "":
+            if coverage != ""and coverage != "\n":
                 coverages.append(int(coverage))
+    print(len(coverages), "lengte coverages")
 
 
 def calculate_coverage_avg():
