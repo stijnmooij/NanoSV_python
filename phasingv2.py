@@ -2,13 +2,12 @@ import os
 import sys
 import plotly as py
 import plotly.graph_objs as go
-from sklearn.cluster import KMeans
-import numpy as np
 
 matrix = []
 posities = []
 nucleotide_indexes = []
 seqs = []
+
 
 def preparation():
     with os.popen('/data/sambamba_v0.6.3  view ' + sys.argv[1]) as bam:
@@ -31,7 +30,7 @@ def preparation():
                     number += char
                 elif char == "X":
                     for mismatch in range(int(number)):
-                        cursor+=1
+                        cursor += 1
                         nucleotide_indexes[read_number][cursor] = seq_base_index
                         seq_base_index += 1
                     number = ""
@@ -51,8 +50,8 @@ def preparation():
                     number = ""
             read_number += 1
 
-def main():
-    preparation()
+
+def fill_matrix():
     with os.popen('/data/sambamba_v0.6.3  view ' + sys.argv[1]) as bam:
         read_number = 0
         for line in bam:
@@ -69,9 +68,8 @@ def main():
                     number += char
                 elif char == "X":
                     for mismatch in range(int(number)):
-                        cursor+=1
+                        cursor += 1
                         if cursor >= 149006000:
-                            # print(cursor, columns[9][seq_base_index])
                             if cursor not in posities:
                                 idx = len(posities)
                                 if len(posities) == 0:
@@ -135,27 +133,105 @@ def main():
                 elif char == "H":
                     number = ""
             read_number += 1
-#
+
+def filter_matrix():
+    to_be_deleted = []
+    for pos in posities:
+        values_of_position = []
+        for read in matrix:
+            print(read)
+            if matrix[read][pos] not in values_of_position:
+                values_of_position.append(matrix[read][pos])
+        if len(values_of_position) <= 2:
+            to_be_deleted.append(pos)
+    print(pos)
+
+def heatmap():
+    trace = go.Heatmap(z=matrix,
+                       y=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+                       x=posities)
+    data = [trace]
+    py.offline.plot(data, filename='labelled-heatmap')
+
+
+def clustering():
+    clustering_matrix = make_clustering_matrix()
+    while len(clustering_matrix) > 2:
+        # print(clustering_matrix)
+        keys = []
+        for x in clustering_matrix:
+            keys.append(x)
+        highest_score = 0
+        readA = 0
+        readB = 0
+        for i in keys:
+            for key, value in clustering_matrix[i].items():
+                if value >= highest_score:
+                    highest_score = value
+                    readA = key
+                    readB = i
+
+        merged_name = str(readA) + "," + str(readB)
+        merged_dict = {}
+        for j in keys:
+            if j == readA or j == readB:
+                continue
+            sum_of_scores = 0
+            for read in [readA, readB]:
+                # readlist = read.split(",")
+                if max(map(int, read.split(","))) >= max(map(int, j.split(","))):
+                    sum_of_scores += clustering_matrix[str(read)][str(j)]
+                else:
+                    sum_of_scores += clustering_matrix[str(j)][str(read)]
+            merged_dict[str(j)] = sum_of_scores/2
+
+        del_list = []
+        for item, merged_value in merged_dict.items():
+            if max(map(int, item.split(","))) <= max(map(int, readB.split(","))):
+                continue
+            clustering_matrix[str(item)][str(merged_name)] = merged_value
+            # print(clustering_matrix)
+            del_list.append(item)
+        del clustering_matrix[str(readA)]
+        del clustering_matrix[str(readB)]
+        for read in clustering_matrix:
+            if readA in clustering_matrix[read]:
+                del clustering_matrix[read][readA]
+            if readB in clustering_matrix[read]:
+                del clustering_matrix[read][readB]
+        for item in del_list:
+            del merged_dict[str(item)]
+
+
+        clustering_matrix[merged_name] = merged_dict
+    print(clustering_matrix)
+    # clustering_matrix[str(read1) + "," + str(read2)] = {}
+
+
+def make_clustering_matrix():
+    clustering_matrix = {}
+    for read in range(len(matrix)):
+        clustering_matrix[str(read)] = {}
+    for i in range(len(clustering_matrix)):
+        for j in range(i+1):
+            mutations_in_common = 0
+            if j == i:
+                clustering_matrix[str(i)][str(j)] = 0
+            else:
+                for pos in range(len(matrix[i])):
+                    if matrix[i][pos] == matrix[j][pos]:
+                        mutations_in_common += 1
+                clustering_matrix[str(i)][str(j)] = mutations_in_common
+    return clustering_matrix
+
+
+def main():
+    preparation()
+    fill_matrix()
+    filter_matrix()
+    # heatmap()
+    clustering()
+
+
 main()
-# for rd in matrix:
-#     print(len(rd))
-# heatmap_pos = []
-# for coordinate in range(0,956):
-#     heatmap_pos.append(coordinate)
 
-# print("\n\n", nucleotide_indexes[13][149006000], matrix[13][0])
-
-# trace = go.Heatmap(z = matrix,
-#                    y = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
-#                    x = posities)
-# data = [trace]
-# py.offline.plot(data, filename = 'labelled-heatmap')
-
-#,
-#                    colorscale=[[0, 'rgb(128, 128, 128)'], [1, 'rgb(0, 179, 0)'], [2, 'rgb(0, 0, 255)'],
-#                                [3, 'rgb(255, 204, 0)'], [4, 'rgb(255, 0, 0)']]
-
-
-X = np.array(matrix)
-kmeans = KMeans(n_clusters=2, random_state=0)
-print(kmeans.fit_predict(X))
