@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+
 class Segment:
     def __init__(self, id, qname, flag, rname, pos, mapq, length):
         self.id = id
@@ -27,4 +28,4 @@ class Segment:
         self.pid = format(cigar['='] / float(self.length), '.3f')
 
     def setPlength(self, rlength):
-        self.plength = format(self.length/ rlength, '.3f')
+        self.plength = format(self.length / rlength, '.3f')
