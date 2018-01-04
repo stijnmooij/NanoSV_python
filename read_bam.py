@@ -1,9 +1,9 @@
-import optparse
 import os
 import random
 import sys
 import textwrap
 import time
+import configparser
 
 from collections import defaultdict
 
@@ -14,49 +14,73 @@ import sv as svclass
 
 import re
 
-parser = optparse.OptionParser()
-group1 = optparse.OptionGroup(parser, 'General options')
-group2 = optparse.OptionGroup(parser, 'Filter options')
-group3 = optparse.OptionGroup(parser, 'Detection options')
-group4 = optparse.OptionGroup(parser, 'Output filter options')
-group1.add_option('-t', '--threads', type="int", dest='threads', help='[i] Number of threads. Default: 8', default=8)
-group1.add_option('--sambamba', dest='sambamba', help='[s] Path to sambamba: Default: sambamba_v0.6.3',
-                  default="apps/sambamba_v0.6.3")
-group2.add_option('-s', '--split', type="int", dest='split', help='[i]Maximum number of segments per read. Default: 10',
-                  default=10)
-group2.add_option('-p', '--pid', type="int", dest='pid',
-                  help='[s] Minimum percentage identity to reference. Default: 0.70', default=0.70)
-group2.add_option('-m', '--mapq', type="int", dest='mapq', help='[i] Minimum mapping quality. Default: 20', default=20)
-group3.add_option('-d', '--distance', type="int", dest='distance',
-                  help='[i] Maximum distance to cluster SVs together. Default: 10', default=10)
-group3.add_option('-c', '--count', type="int", dest='count', help='[i] Minimum number of supporting reads. Default: 2',
-                  default=2)
-group3.add_option('-f', '--refdistance', type="int", dest='refdistance',
-                  help='Minimum distance for reference reads: Default: 100', default=100)
-group3.add_option('-u', '--unmapped', type="int", dest='unmapped',
-                  help='[i] Minimum unmapped length of hanging segments: 20', default=20)
-group3.add_option('-r', '--matedistance', type="int", dest='matedistance',
-                  help='[i] Maximum distance to look for mateid. Default: 300', default=300)
-group3.add_option('-b', '--bed', dest='bedfile',
-                  help='[i] name of bedfile containing sequenced areas, to be used in DUPDEL analysis', default='-')
-group4.add_option('-w', '--window', type="int", dest='window', help='[i] Maximum window size. Default: 1000',
-                  default=1000)
-group4.add_option('-n', '--cluster', type="int", dest='cluster',
-                  help='[i] Maximum number of SVs in a window. Default: 2', default=2)
-group4.add_option('-q', '--mapqf', type="int", dest='mapqf', help='Minimum median mapping quality of a SV. Default: 80',
-                  default=80)
-group4.add_option('-i', '--pidf', type="int", dest='pidf',
-                  help='[s] Minimum median percentage identity to reference. Default: 0.80', default=0.80)
-group4.add_option('-g', '--gap', type="int", dest='gap', help='[i] Maximum median gap size. Default: 100', default=100)
-group4.add_option('-y', '--ci', type="int", dest='ci', help='[i] Maximum Confidence interval distance. Default: 20',
-                  default=20)
-group4.add_option('-o', '--output', dest='output', help='Name of output vcf file', default="structural_variation.vcf")
+cfg = configparser.ConfigParser()
+cfg.read(sys.argv[2])
 
-parser.add_option_group(group1)
-parser.add_option_group(group2)
-parser.add_option_group(group3)
-parser.add_option_group(group4)
-(opts, args) = parser.parse_args()
+opts_threads = int(cfg.get('General Options', 'threads'))
+opts_sambamba = cfg.get('General Options', 'sambamba')
+
+opts_split = int(cfg.get('Filter Options', 'split'))
+opts_pid = float(cfg.get('Filter Options', 'pid'))
+opts_mapq = int(cfg.get('Filter Options', 'mapq'))
+
+opts_distance = int(cfg.get('Detection Options', 'distance'))
+opts_count = int(cfg.get('Detection Options', 'count'))
+opts_refdistance = int(cfg.get('Detection Options', 'refdistance'))
+opts_unmapped = int(cfg.get('Detection Options', 'unmapped'))
+opts_matedistance = int(cfg.get('Detection Options', 'matedistance'))
+opts_bed = cfg.get('Detection Options', 'bed')
+
+opts_window = int(cfg.get('Output Filter Options', 'window'))
+opts_cluster = int(cfg.get('Output Filter Options', 'cluster'))
+opts_mapqf = int(cfg.get('Output Filter Options', 'mapqf'))
+opts_pidf = float(cfg.get('Output Filter Options', 'pidf'))
+opts_gap = int(cfg.get('Output Filter Options', 'gap'))
+opts_ci = int(cfg.get('Output Filter Options', 'ci'))
+opts_output = cfg.get('Output Filter Options', 'output')
+# parser = optparse.OptionParser()
+# group1 = optparse.OptionGroup(parser, 'General options')
+# group2 = optparse.OptionGroup(parser, 'Filter options')
+# group3 = optparse.OptionGroup(parser, 'Detection options')
+# group4 = optparse.OptionGroup(parser, 'Output filter options')
+# group1.add_option('-t', '--threads', type="int", dest='threads', help='[i] Number of threads. Default: 8', default=8)
+# group1.add_option('--sambamba', dest='sambamba', help='[s] Path to sambamba: Default: sambamba_v0.6.3',
+#                   default="apps/sambamba_v0.6.3")
+# group2.add_option('-s', '--split', type="int", dest='split', help='[i]Maximum number of segments per read. Default: 10',
+#                   default=10)
+# group2.add_option('-p', '--pid', type="int", dest='pid',
+#                   help='[s] Minimum percentage identity to reference. Default: 0.70', default=0.70)
+# group2.add_option('-m', '--mapq', type="int", dest='mapq', help='[i] Minimum mapping quality. Default: 20', default=20)
+# group3.add_option('-d', '--distance', type="int", dest='distance',
+#                   help='[i] Maximum distance to cluster SVs together. Default: 10', default=10)
+# group3.add_option('-c', '--count', type="int", dest='count', help='[i] Minimum number of supporting reads. Default: 2',
+#                   default=2)
+# group3.add_option('-f', '--refdistance', type="int", dest='refdistance',
+#                   help='Minimum distance for reference reads: Default: 100', default=100)
+# group3.add_option('-u', '--unmapped', type="int", dest='unmapped',
+#                   help='[i] Minimum unmapped length of hanging segments: 20', default=20)
+# group3.add_option('-r', '--matedistance', type="int", dest='matedistance',
+#                   help='[i] Maximum distance to look for mateid. Default: 300', default=300)
+# group3.add_option('-b', '--bed', dest='bed',
+#                   help='[i] name of bedfile containing sequenced areas, to be used in DUPDEL analysis', default='-')
+# group4.add_option('-w', '--window', type="int", dest='window', help='[i] Maximum window size. Default: 1000',
+#                   default=1000)
+# group4.add_option('-n', '--cluster', type="int", dest='cluster',
+#                   help='[i] Maximum number of SVs in a window. Default: 2', default=2)
+# group4.add_option('-q', '--mapqf', type="int", dest='mapqf', help='Minimum median mapping quality of a SV. Default: 80',
+#                   default=80)
+# group4.add_option('-i', '--pidf', type="int", dest='pidf',
+#                   help='[s] Minimum median percentage identity to reference. Default: 0.80', default=0.80)
+# group4.add_option('-g', '--gap', type="int", dest='gap', help='[i] Maximum median gap size. Default: 100', default=100)
+# group4.add_option('-y', '--ci', type="int", dest='ci', help='[i] Maximum Confidence interval distance. Default: 20',
+#                   default=20)
+# group4.add_option('-o', '--output', dest='output', help='Name of output vcf file', default="structural_variation.vcf")
+#
+# parser.add_option_group(group1)
+# parser.add_option_group(group2)
+# parser.add_option_group(group3)
+# parser.add_option_group(group4)
+# (opts, args) = parser.parse_args()
 
 bam = sys.argv[1]
 
@@ -68,7 +92,7 @@ hanging_breakpoints_region = defaultdict(lambda: defaultdict(lambda: defaultdict
 structural_variants = {}
 structural_variants_region = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(int))))
 structural_variants_region_2 = defaultdict(lambda: defaultdict(int))
-output = open(opts.output, "w")
+output = open(opts_output, "w")
 coverages = []
 aantal_svs = 0
 svID = 1
@@ -93,8 +117,8 @@ def parse_svs():
                     break
                 for sv_id in structural_variants_region[segments[segment_id].rname][sv_min][sv_max]:
                     x = structural_variants_region[segments[segment_id].rname][sv_min][sv_max][sv_id]
-                    if sv_min > (segments[segment_id].pos + opts.refdistance) and sv_max < (
-                                segments[segment_id].end - opts.refdistance):
+                    if sv_min > (segments[segment_id].pos + opts_refdistance) and sv_max < (
+                                segments[segment_id].end - opts_refdistance):
                         structural_variants[sv_id].format['DR'][x] += 1
                         structural_variants[sv_id].format['RO'][x] += (1 - 10 ** (-segments[segment_id].mapq / 10.0))
         prev_rname = segments[segment_id].rname
@@ -110,9 +134,9 @@ def parse_svs():
             if structural_variants[sv_id_2].set != 1: structural_variants[sv_id_2].setArguments()
             if structural_variants[sv_id].chr != structural_variants[sv_id_2].chr: continue
             if structural_variants[sv_id].chr2 != structural_variants[sv_id_2].chr2: continue
-            if abs(structural_variants[sv_id].pos - structural_variants[sv_id_2].pos) <= opts.window and abs(
+            if abs(structural_variants[sv_id].pos - structural_variants[sv_id_2].pos) <= opts_window and abs(
                             structural_variants[sv_id].info['END'] - structural_variants[sv_id_2].info[
-                        'END']) <= opts.window:
+                        'END']) <= opts_window:
                 structural_variants[sv_id].SVcluster += 1
                 structural_variants[sv_id_2].SVcluster += 1
             if structural_variants[sv_id_2].info['SVTYPE'] != "BND": continue
@@ -134,29 +158,29 @@ def parse_svs():
                                                                                                    sv_id_2].alt):
                 continue
 
-            if abs(structural_variants[sv_id].pos - structural_variants[sv_id_2].pos) > opts.matedistance: continue
+            if abs(structural_variants[sv_id].pos - structural_variants[sv_id_2].pos) > opts_matedistance: continue
             if abs(structural_variants[sv_id].info['END'] - structural_variants[sv_id_2].info[
-                'END']) > opts.matedistance: continue
+                'END']) > opts_matedistance: continue
             structural_variants[sv_id].info['MATEID'] = sv_id_2
             structural_variants[sv_id_2].info['MATEID'] = sv_id
-        if structural_variants[sv_id].SVcluster > opts.cluster: structural_variants[sv_id].filter.append("SVcluster")
-        if structural_variants[sv_id].info['GAP'] > opts.gap and structural_variants[sv_id].info['SVTYPE'] != "INS":
+        if structural_variants[sv_id].SVcluster > opts_cluster: structural_variants[sv_id].filter.append("SVcluster")
+        if structural_variants[sv_id].info['GAP'] > opts_gap and structural_variants[sv_id].info['SVTYPE'] != "INS":
             structural_variants[sv_id].filter.append("GAP")
         if re.match("(\d+),(\d+)", structural_variants[sv_id].info['MAPQ']):
             ma = re.search("(\d+),(\d+)", structural_variants[sv_id].info['MAPQ'])
-            if int(ma.group(1)) < opts.mapqf or int(ma.group(2)) < opts.mapqf: structural_variants[sv_id].filter.append(
+            if int(ma.group(1)) < opts_mapqf or int(ma.group(2)) < opts_mapqf: structural_variants[sv_id].filter.append(
                 "MapQual")
         if re.match("(\d.\d+),(\d.\d+)", structural_variants[sv_id].info['PID']):
             ma = re.search("(\d.\d+),(\d.\d+)", structural_variants[sv_id].info['PID'])
-            if float(ma.group(1)) < opts.pidf or float(ma.group(2)) < opts.pidf: structural_variants[
+            if float(ma.group(1)) < opts_pidf or float(ma.group(2)) < opts_pidf: structural_variants[
                 sv_id].filter.append("PID")
         if re.match("(\d+),(\d+)", structural_variants[sv_id].info['CIPOS']):
             ma = re.search("(\d+),(\d+)", structural_variants[sv_id].info['CIPOS'])
-            if int(ma.group(1)) > opts.ci or int(ma.group(2)) > opts.ci: structural_variants[sv_id].filter.append(
+            if int(ma.group(1)) > opts_ci or int(ma.group(2)) > opts_ci: structural_variants[sv_id].filter.append(
                 "CIPOS")
         if re.match("(\d+),(\d+)", structural_variants[sv_id].info['CIEND']):
             ma = re.search("(\d+),(\d+)", structural_variants[sv_id].info['CIEND'])
-            if int(ma.group(1)) > opts.ci or int(ma.group(2)) > opts.ci: structural_variants[sv_id].filter.append(
+            if int(ma.group(1)) > opts_ci or int(ma.group(2)) > opts_ci: structural_variants[sv_id].filter.append(
                 "CIEND")
 
         if structural_variants[sv_id].info['SVTYPE'] == 'INS': structural_variants[sv_id].info['SVLEN'] = \
@@ -166,16 +190,16 @@ def parse_svs():
 
 
 def addSVInfo(sv):
-    if sum(sv.format['DV']) >= opts.count * 2:
+    if sum(sv.format['DV']) >= opts_count * 2:
         for flag in [sv.flag1 - 1, sv.flag2 + 1]:
 
             if flag == -1 or flag == 17: head_tail = 'T'
             if flag == 15 or flag == 1: head_tail = 'H'
 
             for hanging_pos in sorted(hanging_breakpoints_region[sv.chr][head_tail]):
-                if hanging_pos < (min(sv.pos) - opts.distance):
+                if hanging_pos < (min(sv.pos) - opts_distance):
                     continue
-                if hanging_pos > (max(sv.pos) + opts.distance):
+                if hanging_pos > (max(sv.pos) + opts_distance):
                     break
                 for hanging_id in hanging_breakpoints_region[sv.chr][head_tail][hanging_pos]:
                     segment_id = hanging_breakpoints_region[sv.chr][head_tail][hanging_pos][hanging_id]
@@ -200,12 +224,14 @@ def addSVInfo(sv):
 
 def calculate_coverage_bed():
     global coverages
-    os.system("cat " + opts.bedfile + "| sort > " + opts.bedfile[:-3] + "sorted.bed")
+    print("cat " + opts_bed + "| sort > " + opts_bed[:-3] + "sorted.bed")
+    os.system("cat " + opts_bed + "| sort > " + opts_bed[:-3] + "sorted.bed")
     original_coordinates = {}
     chromosomes = []
     total_positions = 0
-    with open(opts.bedfile[:-3] + "sorted.bed", "r") as bed:
+    with open(opts_bed[:-3] + "sorted.bed", "r") as bed:
         for line in bed:
+            print(line, "line")
             line = line.rstrip().split("\t")
             line = [int(x) for x in line]
             if line[0] in original_coordinates:
@@ -232,7 +258,7 @@ def calculate_coverage_bed():
                 break
         file.write(position_string + "\n")
     file.close()
-    with os.popen(opts.sambamba + " depth base --min-coverage=0 " + bam + " -L bedfile.bed " + " | awk '{if (NR!=1) print $3}'") as coverageOutput:
+    with os.popen(opts_sambamba + " depth base --min-coverage=0 " + bam + " -L bedfile.bed " + " | awk '{if (NR!=1) print $3}'") as coverageOutput:
         for coverage in coverageOutput:
             if coverage != ""and coverage != "\n":
                 coverages.append(int(coverage))
@@ -241,13 +267,12 @@ def calculate_coverage_bed():
 
 def calculate_coverage_avg():
     global coverages
-    with os.popen(opts.sambamba + ' view -s 0.10 ' + bam) as sample:
+    with os.popen(opts_sambamba + ' view -s 0.10 ' + bam) as sample:
         for line in sample:
             line = line.rstrip()
             columns = line.split("\t")
             position = str(columns[2]) + ":" + str(columns[3]) + "-" + str(int(columns[3]) + 1)
-            with os.popen(
-                                                            opts.sambamba + " depth base " + bam + " -L " + position + " | awk '{if (NR!=1) print $0}'") as coverageOutput:
+            with os.popen(opts_sambamba + " depth base " + bam + " -L " + position + " | awk '{if (NR!=1) print $0}'") as coverageOutput:
                 for coverage in coverageOutput:
                     coverages.append(coverage[2])
 
@@ -261,13 +286,13 @@ def parse_breakpoints_2(breakpoints_region_2):
             for breakpoint_id in breakpoints_region_2[pos_2][pos_1]:
                 breakpoint = breakpoints[breakpoint_id]
                 if (prev_pos_2 == -1):
-                    sv = svclass.SV(svID, breakpoint, bam, opts.sambamba, coverages)
+                    sv = svclass.SV(svID, breakpoint, bam, opts_sambamba, coverages)
                     svID += 1
-                elif abs(breakpoint.segment_2["pos"] - prev_pos_2) <= opts.distance:
+                elif abs(breakpoint.segment_2["pos"] - prev_pos_2) <= opts_distance:
                     sv.addBreakpoint(breakpoint)
                 else:
                     addSVInfo(sv)
-                    sv = svclass.SV(svID, breakpoint, bam, opts.sambamba, coverages)
+                    sv = svclass.SV(svID, breakpoint, bam, opts_sambamba, coverages)
                     svID += 1
 
                 sv.addInfoField("PID",
@@ -302,7 +327,7 @@ def parse_breakpoints():
             for breakpoint_id in breakpoints_region[region][pos_1]:
                 if prev_pos_1 == -1:
                     breakpoints_region_2[breakpoints[breakpoint_id].segment_2["pos"]][pos_1][breakpoint_id] = 1
-                elif abs(pos_1 - prev_pos_1) <= opts.distance:
+                elif abs(pos_1 - prev_pos_1) <= opts_distance:
                     breakpoints_region_2[breakpoints[breakpoint_id].segment_2["pos"]][pos_1][breakpoint_id] = 1
                 else:
                     parse_breakpoints_2(breakpoints_region_2)
@@ -318,7 +343,7 @@ def parse_reads():
     hanging_breakpointID = -1
     for qname in reads:
         clips = sorted(reads[qname].segments)
-        if len(clips) == 1 or len(clips) > opts.split:
+        if len(clips) == 1 or len(clips) > opts_split:
             continue
         for i in range(0, (len(clips) - 1)):
             i2 = i + 1
@@ -344,7 +369,7 @@ def parse_reads():
             values = (breakpoint.svtype, str(breakpoint.segment_1["rname"]), str(breakpoint.segment_2["rname"]),
                       str(breakpoint.segment_1["flag"]), str(breakpoint.segment_2["flag"]))
             breakpoints_region["\t".join(values)][breakpoint.segment_1["pos"]][breakpoint.id] = 1
-            if i == 0 and segment_1.clip >= opts.unmapped:
+            if i == 0 and segment_1.clip >= opts_unmapped:
                 hanging_breakpoint_pos = segment_1.pos
                 if segment_1.flag == 16:
                     hanging_breakpoint_pos = segment_1.end
@@ -355,7 +380,7 @@ def parse_reads():
                     hanging_breakpoints_region[segment_1.rname]['H'][hanging_breakpoint_pos][
                         hanging_breakpointID] = segment_1.id
                     hanging_breakpointID = hanging_breakpointID - 1
-            if i2 == len(clips) - 1 and segment_2.clip_2 >= opts.unmapped:
+            if i2 == len(clips) - 1 and segment_2.clip_2 >= opts_unmapped:
                 hanging_breakpoint_pos = segment_2.end
                 if segment_2.flag == 16:
                     hanging_breakpoint_pos = segment_2.pos
@@ -383,7 +408,7 @@ def parse_cigar(cigar):
 def parse_bam(bam, segmentID):
     sys.stderr.write(time.strftime("%c") + " Busy with parsing bam file...\n")
 
-    with os.popen(opts.sambamba + ' view -t ' + str(opts.threads) + ' ' + bam) as bam:
+    with os.popen(opts_sambamba + ' view -t ' + str(opts_threads) + ' ' + bam) as bam:
         for line in bam:
             line = line.rstrip()
             columns = line.split("\t")
@@ -393,11 +418,11 @@ def parse_bam(bam, segmentID):
             else:
                 read = r.Read(columns[0], (len(columns[9]) + sum(cigar['H'])))
                 reads[columns[0]] = read
-            if int(columns[1]) & 4 or int(columns[4]) < opts.mapq:
+            if int(columns[1]) & 4 or int(columns[4]) < opts_mapq:
                 continue
             segment = s.Segment(segmentID, columns[0], columns[1], columns[2], columns[3], columns[4], len(columns[9]))
             segment.parseCigar(cigar)
-            if float(segment.pid) < opts.pid:
+            if float(segment.pid) < opts_pid:
                 continue
             read.addSegment(segment)
             segments[segmentID] = segment
@@ -432,13 +457,13 @@ def print_vcf_header():
 ##FORMAT=<ID=SQ,Number=1,Type=Float,Description="Phred-scaled probability that this site is variant (non-reference in this sample)">
 ##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
 ##FORMAT=<ID=HR,Number=2,Type=Integer,Description="Number of hanging variant reads">
-##FILTER=<ID=SVcluster,Description="There are more than """ + str(opts.cluster) + """ SVs in a window of """ + str(
-        opts.window) + """ on both sides">
-##FILTER=<ID=GAP,Description="The median gap size is larger than """ + str(opts.gap) + """ for non insertions">
-##FILTER=<ID=MapQual,Description="The median mapping quality is less than """ + str(opts.mapqf) + """">
-##FILTER=<ID=PID,Description="The PID of one of the segments is less than """ + str(opts.pidf) + """">
-##FILTER=<ID=CIPOS,Description="The CIPOS is greater or less than """ + str(opts.ci) + """">
-##FILTER=<ID=CIEND,Description="The CIEND is greater or less than """ + str(opts.ci) + """">\n"""))
+##FILTER=<ID=SVcluster,Description="There are more than """ + str(opts_cluster) + """ SVs in a window of """ + str(
+        opts_window) + """ on both sides">
+##FILTER=<ID=GAP,Description="The median gap size is larger than """ + str(opts_gap) + """ for non insertions">
+##FILTER=<ID=MapQual,Description="The median mapping quality is less than """ + str(opts_mapqf) + """">
+##FILTER=<ID=PID,Description="The PID of one of the segments is less than """ + str(opts_pidf) + """">
+##FILTER=<ID=CIPOS,Description="The CIPOS is greater or less than """ + str(opts_ci) + """">
+##FILTER=<ID=CIEND,Description="The CIEND is greater or less than """ + str(opts_ci) + """">\n"""))
     output.write("\t".join(['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', "4596TP", "\n"]))
 
 
@@ -456,9 +481,11 @@ def print_vcf_header():
 def main():
     # check_opt()
     print_vcf_header()
-    if opts.bedfile == '-':
+    if opts_bed == '-':
+        print("avg")
         calculate_coverage_avg()
     else:
+        print("off. charts")
         calculate_coverage_bed()
     parse_bam(bam, segmentID);
     parse_reads()
