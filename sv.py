@@ -112,7 +112,7 @@ class SV:
                     self.alt = self.ref + "]" + self.chr2 + ":" + str(floor(self.info['END'])) + "]"
                 else:
                     self.alt = self.ref + "[" + self.chr2 + ":" + str(floor(self.info['END'])) + "["
-                    if read_bam.opts_coverage_dupdel_check == 'true':
+                    if read_bam.opts_coverage_dupdel_check == 'true':    
                         avg_dupdel_cov = self.getDupDelcoverage()
                         if self.significanceTest(avg_dupdel_cov, False):
                             self.alt = "<DEL>"
