@@ -7,6 +7,7 @@ from math import floor
 
 import math
 import re
+import read_bam
 
 import os
 
@@ -99,10 +100,11 @@ class SV:
             if self.flag1 == 16:
                 if self.flag2 == 16:
                     self.alt = "]" + self.chr2 + ":" + str(floor(self.info['END'])) + "]" + self.ref
-                    avg_dupdel_cov = self.getDupDelcoverage()
-                    if self.significanceTest(avg_dupdel_cov, True):
-                        self.alt = "<DUP>"
-                    dup = 1
+                    if read_bam.opts_coverage_dupdel_check == 'true':
+                        avg_dupdel_cov = self.getDupDelcoverage()
+                        if self.significanceTest(avg_dupdel_cov, True):
+                            self.alt = "<DUP>"
+                        dup = 1
                 else:
                     self.alt = "[" + self.chr2 + ":" + str(floor(self.info['END'])) + "[" + self.ref
             else:
@@ -110,9 +112,10 @@ class SV:
                     self.alt = self.ref + "]" + self.chr2 + ":" + str(floor(self.info['END'])) + "]"
                 else:
                     self.alt = self.ref + "[" + self.chr2 + ":" + str(floor(self.info['END'])) + "["
-                    avg_dupdel_cov = self.getDupDelcoverage()
-                    if self.significanceTest(avg_dupdel_cov, False):
-                        self.alt = "<DEL>"
+                    if read_bam.opts_coverage_dupdel_check == 'true':
+                        avg_dupdel_cov = self.getDupDelcoverage()
+                        if self.significanceTest(avg_dupdel_cov, False):
+                            self.alt = "<DEL>"
         gt_lplist = self.bayes_gt(sum(self.format['RO']), sum(self.format['VO']), dup)
         gt_idx = gt_lplist.index(max(gt_lplist))
 
