@@ -10,7 +10,7 @@ seqs = []
 
 
 def preparation():
-    with os.popen('/data/sambamba_v0.6.3  view ' + sys.argv[1]) as bam:
+    with os.popen('~/apps/sambamba_v0.6.3  view ' + sys.argv[1]) as bam:
         read_number = 0
         sv_position = 167393746
         leftmost_mapping_position = None

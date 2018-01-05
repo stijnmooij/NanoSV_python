@@ -8,7 +8,6 @@ from math import floor
 import math
 import re
 import read_bam
-
 import os
 
 
@@ -104,6 +103,7 @@ class SV:
                         avg_dupdel_cov = self.getDupDelcoverage()
                         if self.significanceTest(avg_dupdel_cov, True):
                             self.alt = "<DUP>"
+                            self.info['SVTYPE'] = "DUP"
                         dup = 1
                 else:
                     self.alt = "[" + self.chr2 + ":" + str(floor(self.info['END'])) + "[" + self.ref
@@ -116,6 +116,7 @@ class SV:
                         avg_dupdel_cov = self.getDupDelcoverage()
                         if self.significanceTest(avg_dupdel_cov, False):
                             self.alt = "<DEL>"
+                            self.info['SVTYPE'] = "DEL"
         gt_lplist = self.bayes_gt(sum(self.format['RO']), sum(self.format['VO']), dup)
         gt_idx = gt_lplist.index(max(gt_lplist))
 
