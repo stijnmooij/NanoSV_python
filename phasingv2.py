@@ -1,7 +1,7 @@
 import os
 import sys
-import plotly as py
-import plotly.graph_objs as go
+# import plotly as py
+# import plotly.graph_objs as go
 
 matrix = []
 posities = []
@@ -12,6 +12,8 @@ seqs = []
 def preparation():
     with os.popen('/data/sambamba_v0.6.3  view ' + sys.argv[1]) as bam:
         read_number = 0
+        sv_position = 167393746
+        leftmost_mapping_position = None
         for line in bam:
             read = line.rstrip()
             columns = read.split("\t")
@@ -22,6 +24,13 @@ def preparation():
             cursor = int(columns[3]) - 1
             number = ""
             seq_base_index = 0
+            if leftmost_mapping_position is None:
+                leftmost_mapping_position = int(columns[3])
+            elif leftmost_mapping_position > int(columns[3]):
+                leftmost_mapping_position = int(columns[3])
+            else:
+                for none_position in range(leftmost_mapping_position, cursor + 1):
+                    nucleotide_indexes[read_number][none_position] = None
             done = False
             for char in cigar:
                 if done == True:
@@ -48,12 +57,24 @@ def preparation():
                     number = ""
                 elif char == "H":
                     number = ""
+            if cursor < 167395746:
+                for unknown_nuc_index in range(cursor, 167395746):
+                    nucleotide_indexes[read_number][unknown_nuc_index] = None
+            elif len(nucleotide_indexes[read_number]) < 1000:
+                for unknown_nuc_index in range(sv_position, int(columns[3])):
+                    nucleotide_indexes[read_number][unknown_nuc_index] = None
             read_number += 1
+
+
+def create_na_values():
+    for read in matrix:
+        print(len(read))
 
 
 def fill_matrix():
     with os.popen('/data/sambamba_v0.6.3  view ' + sys.argv[1]) as bam:
         read_number = 0
+        teller = 0
         for line in bam:
             read = line.rstrip()
             columns = read.split("\t")
@@ -69,8 +90,12 @@ def fill_matrix():
                 elif char == "X":
                     for mismatch in range(int(number)):
                         cursor += 1
-                        if cursor >= 149006000:
+                        if cursor >= 167395746:
+                            done = True
+                            break
+                        if cursor >= 167393746:
                             if cursor not in posities:
+                                teller += 1
                                 idx = len(posities)
                                 if len(posities) == 0:
                                     posities.append(cursor)
@@ -85,6 +110,8 @@ def fill_matrix():
                                 for read_number_bc in range(len(seqs)):
                                     if nucleotide_indexes[read_number_bc][cursor] == -1:
                                         matrix[read_number_bc].insert(idx, 0)
+                                    elif nucleotide_indexes[read_number_bc][cursor] is None:
+                                        matrix[read_number_bc].insert(idx, None)
                                     elif seqs[read_number_bc][nucleotide_indexes[read_number_bc][cursor]] == 'A':
                                         matrix[read_number_bc].insert(idx, 1)
                                     elif seqs[read_number_bc][nucleotide_indexes[read_number_bc][cursor]] == 'C':
@@ -93,15 +120,16 @@ def fill_matrix():
                                         matrix[read_number_bc].insert(idx, 3)
                                     elif seqs[read_number_bc][nucleotide_indexes[read_number_bc][cursor]] == 'T':
                                         matrix[read_number_bc].insert(idx, 4)
-                        if cursor >= 149006955:
-                            done = True
-                            break
                     number = ""
                 elif char == "=" or char == "D":
                     for i in range(int(number)):
                         cursor += 1
-                        if cursor >= 149006000:
-                            if cursor in posities and char == "D":
+                        if cursor >= 167395746:
+                            done = True
+                            break
+                        if cursor >= 167393746:
+                            if cursor not in posities and char == "D":
+                                teller += 1
                                 idx = len(posities)
                                 if len(posities) == 0:
                                     posities.append(cursor)
@@ -116,6 +144,8 @@ def fill_matrix():
                                 for read_number_bc in range(len(seqs)):
                                     if nucleotide_indexes[read_number_bc][cursor] == -1:
                                         matrix[read_number_bc].insert(idx, 0)
+                                    elif nucleotide_indexes[read_number_bc][cursor] is None:
+                                        matrix[read_number_bc].insert(idx, None)
                                     elif seqs[read_number_bc][nucleotide_indexes[read_number_bc][cursor]] == 'A':
                                         matrix[read_number_bc].insert(idx, 1)
                                     elif seqs[read_number_bc][nucleotide_indexes[read_number_bc][cursor]] == 'C':
@@ -124,9 +154,6 @@ def fill_matrix():
                                         matrix[read_number_bc].insert(idx, 3)
                                     elif seqs[read_number_bc][nucleotide_indexes[read_number_bc][cursor]] == 'T':
                                         matrix[read_number_bc].insert(idx, 4)
-                        if cursor >= 149006955:
-                            done = True
-                            break
                     number = ""
                 elif char == "I":
                     number = ""
@@ -134,17 +161,26 @@ def fill_matrix():
                     number = ""
             read_number += 1
 
+
 def filter_matrix():
     to_be_deleted = []
-    for pos in posities:
-        values_of_position = []
+    for pos in range(len(posities)):
+        values_of_position = [0,0,0,0,0]
         for read in matrix:
-            print(read)
-            if matrix[read][pos] not in values_of_position:
-                values_of_position.append(matrix[read][pos])
-        if len(values_of_position) <= 2:
-            to_be_deleted.append(pos)
-    print(pos)
+            if read[pos] is not None:
+                values_of_position[read[pos]] += 1
+        true_calls = 0
+        for value in values_of_position[1:]:
+            if value > 0.25*len(matrix):
+                true_calls += 1
+        if true_calls < 2:
+            to_be_deleted.append(posities[pos])
+    for pos in to_be_deleted:
+        index = posities.index(pos)
+        for read in matrix:
+            del read[index]
+        del posities[index]
+
 
 def heatmap():
     trace = go.Heatmap(z=matrix,
@@ -157,7 +193,6 @@ def heatmap():
 def clustering():
     clustering_matrix = make_clustering_matrix()
     while len(clustering_matrix) > 2:
-        # print(clustering_matrix)
         keys = []
         for x in clustering_matrix:
             keys.append(x)
@@ -170,7 +205,8 @@ def clustering():
                     highest_score = value
                     readA = key
                     readB = i
-
+        if highest_score < 0.3:
+            break
         merged_name = str(readA) + "," + str(readB)
         merged_dict = {}
         for j in keys:
@@ -178,7 +214,6 @@ def clustering():
                 continue
             sum_of_scores = 0
             for read in [readA, readB]:
-                # readlist = read.split(",")
                 if max(map(int, read.split(","))) >= max(map(int, j.split(","))):
                     sum_of_scores += clustering_matrix[str(read)][str(j)]
                 else:
@@ -190,7 +225,6 @@ def clustering():
             if max(map(int, item.split(","))) <= max(map(int, readB.split(","))):
                 continue
             clustering_matrix[str(item)][str(merged_name)] = merged_value
-            # print(clustering_matrix)
             del_list.append(item)
         del clustering_matrix[str(readA)]
         del clustering_matrix[str(readB)]
@@ -201,11 +235,13 @@ def clustering():
                 del clustering_matrix[read][readB]
         for item in del_list:
             del merged_dict[str(item)]
-
-
         clustering_matrix[merged_name] = merged_dict
-    print(clustering_matrix)
-    # clustering_matrix[str(read1) + "," + str(read2)] = {}
+    if len(clustering_matrix) > 2:
+        print("Not able to phase to 2 clusters.")
+        print("Started with:", len(seqs), "reads")
+        print("Finished with:", len(clustering_matrix), "clusters")
+    # print(len(clustering_matrix))
+    # print(clustering_matrix)
 
 
 def make_clustering_matrix():
@@ -218,16 +254,24 @@ def make_clustering_matrix():
             if j == i:
                 clustering_matrix[str(i)][str(j)] = 0
             else:
+                amount_positions = len(matrix[i])
                 for pos in range(len(matrix[i])):
+                    if matrix[i][pos] is None or matrix[j][pos] is None:
+                        amount_positions -= 1
+                        continue
                     if matrix[i][pos] == matrix[j][pos]:
                         mutations_in_common += 1
-                clustering_matrix[str(i)][str(j)] = mutations_in_common
+                if amount_positions == 0:
+                    clustering_matrix[str(i)][str(j)] = 0
+                else:
+                    clustering_matrix[str(i)][str(j)] = mutations_in_common / amount_positions
     return clustering_matrix
 
 
 def main():
     preparation()
     fill_matrix()
+    # create_na_values()
     filter_matrix()
     # heatmap()
     clustering()
