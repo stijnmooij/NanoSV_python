@@ -22,15 +22,6 @@ class Breakpoint:
         if self.segment_1["rname"] != self.segment_2["rname"]:
             self.svtype = "BND"
         else:
-            # if self.segment_1["flag"] == 16:
-            #     if self.segment_2["flag"] == 16:
-            #         self.svtype = "DUP"
-            #     else:
-            #         self.svtype = "BND"
-            # elif self.segment_2["flag"] == 16:
-            #     self.svtype = "BND"
-            # else:
-            #     self.svtype = "DEL"
             self.svtype = "BND"
             if abs(self.segment_2["pos"] - self.segment_1["pos"]) < self.gap:
                 self.svtype = "INS"
