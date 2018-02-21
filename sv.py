@@ -1,14 +1,16 @@
 #!/usr/bin/python
 
-from statistics import median
 from math import log10
 from math import floor
+from statistics import median
 
-
+import collections
 import math
 import re
 import read_bam
 import os
+import sys
+import vcf as py_vcf
 
 
 class SV:
@@ -42,6 +44,7 @@ class SV:
         }
         self.breakpoints = [breakpoint.id]
         self.set = 0
+
 
     def addBreakpoint(self, breakpoint):
         self.breakpoints.append(breakpoint.id)
@@ -95,27 +98,29 @@ class SV:
         self.setInfoField()
 
         dup = 0
+        if self.alt == "<INS>":
+            self.alt = py_vcf.model._SV("INS")
         if self.alt == "<BND>":
             if self.flag1 == 16:
                 if self.flag2 == 16:
-                    self.alt = "]" + self.chr2 + ":" + str(floor(self.info['END'])) + "]" + self.ref
+                    self.alt = py_vcf.model._Breakend(self.chr2, floor(self.info['END']), True, False , "N" , True)
                     if read_bam.opts_coverage_dupdel_check == 'true':
                         avg_dupdel_cov = self.getDupDelcoverage()
                         if self.significanceTest(avg_dupdel_cov, True):
-                            self.alt = "<DUP>"
+                            self.alt = py_vcf.model._SV("DUP")
                             self.info['SVTYPE'] = "DUP"
                         dup = 1
                 else:
-                    self.alt = "[" + self.chr2 + ":" + str(floor(self.info['END'])) + "[" + self.ref
+                    self.alt = py_vcf.model._Breakend(self.chr2, floor(self.info['END']), True, True , "N" , True)
             else:
                 if self.flag2 == 16:
-                    self.alt = self.ref + "]" + self.chr2 + ":" + str(floor(self.info['END'])) + "]"
+                    self.alt = py_vcf.model._Breakend(self.chr2, floor(self.info['END']), False, False , "N" , True)
                 else:
-                    self.alt = self.ref + "[" + self.chr2 + ":" + str(floor(self.info['END'])) + "["
+                    self.alt = py_vcf.model._Breakend(self.chr2, floor(self.info['END']), False, True , "N" , True)
                     if read_bam.opts_coverage_dupdel_check == 'true':
                         avg_dupdel_cov = self.getDupDelcoverage()
                         if self.significanceTest(avg_dupdel_cov, False):
-                            self.alt = "<DEL>"
+                            self.alt = py_vcf.model._SV("DEL")
                             self.info['SVTYPE'] = "DEL"
         gt_lplist = self.bayes_gt(sum(self.format['RO']), sum(self.format['VO']), dup)
         gt_idx = gt_lplist.index(max(gt_lplist))
@@ -187,6 +192,12 @@ class SV:
 
         return [lp_homref, lp_het, lp_homalt]
 
+    def median_type(self, toCalculate):
+        if type(toCalculate[0]) == float:
+            return median(toCalculate)
+        elif type(toCalculate[0]) == int:
+            return int(median(toCalculate))
+
     def setInfoField(self):
         for field in self.info:
             if field == "RT":
@@ -213,40 +224,49 @@ class SV:
     def setCluster(self, SVcluster):
         self.SVcluster = SVcluster
 
-    def printVCF(self, output):
+    def setFilter(self):
         if len(self.filter) == 1:
             self.filter = "PASS"
         else:
             self.filter = ";".join(self.filter)
             self.filter = self.filter.replace('PASS;', '')
+        return self.filter
 
-        output.write("\t".join(map(str, [self.chr, int(self.pos), self.id, self.ref, self.alt, self.qual, self.filter, self.info['PRECISE']])))
-        for field in self.info:
-            if field == 'PRECISE':
-                continue
-            if field == "END" and self.info['SVTYPE'] == "BND":
-                continue
-            if field == "SVLEN" and not re.match("/^$self->{_chr2}$/", self.chr):
-                continue
+    def setFormat(self):
+        format_list = sorted(self.format.keys())
+        format_list.remove('GT')
+        format_list.insert(0, 'GT')
+        format = ':'.join(format_list)
+        call = py_vcf.model._Call('site', "0TB213", collections.namedtuple('CallData', format_list)(**self.format))
+        samples_indexes = [0]
+        samples = [ call ]
+        return [format, samples_indexes, samples]
 
-            output.write(";%s=%s" % (field, self.info[field]))
-        output.write("\tGT")
-        values = []
-        for field in self.format:
-            if field == 'GT':
-                continue
-            if not re.match("DR|DV|HR|SQ|GQ", field):
-                continue
-            output.write(":%s" % (field))
-            value = self.format[field]
-            if isinstance(value, list):
-                value = ",".join(map(str, self.format[field]))
-            values.append(str(value))
-        output.write("\t%s:%s\n" % (self.format['GT'], ":".join(values)))
-        return output
-
-    def median_type(self, toCalculate):
-        if type(toCalculate[0]) == float:
-            return median(toCalculate)
-        elif type(toCalculate[0]) == int:
-            return int(median(toCalculate))
+    def printVCF(self, vcf_writer):
+        # output.write("\t".join(map(str, [self.chr, int(self.pos), self.id, self.ref, self.alt, self.qual, self.setFilter(), self.info['PRECISE']])))
+        # for field in self.info:
+        #     if field == 'PRECISE':
+        #         continue
+        #     if field == "END" and self.info['SVTYPE'] == "BND":
+        #         continue
+        #     if field == "SVLEN" and not re.match("/^$self->{_chr2}$/", self.chr):
+        #         continue
+        #
+        #     output.write(";%s=%s" % (field, self.info[field]))
+        # output.write("\tGT")
+        # values = []
+        # for field in self.format:
+        #     if field == 'GT':
+        #         continue
+        #     if not re.match("DR|DV|HR|SQ|GQ", field):
+        #         continue
+        #     output.write(":%s" % (field))
+        #     value = self.format[field]
+        #     if isinstance(value, list):
+        #         value = ",".join(map(str, self.format[field]))
+        #     values.append(str(value))
+        # output.write("\t%s:%s\n" % (self.format['GT'], ":".join(values)))
+        # return output
+        format_output = self.setFormat()
+        record = py_vcf.model._Record(self.chr, self.pos, self.id, self.ref, [self.alt], self.qual, self.setFilter(), self.info, format_output[0], format_output[1], format_output[2])
+        vcf_writer.write_record(record)
