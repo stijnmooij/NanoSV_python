@@ -2,7 +2,7 @@
 
 
 class Segment:
-    def __init__(self, id, qname, flag, rname, pos, mapq, length, variations):
+    def __init__(self, id, qname, flag, rname, pos, mapq, length):
         self.id = id
         self.qname = qname
         self.flag = int(flag)
@@ -14,7 +14,6 @@ class Segment:
         self.clip = False
         self.clip_2 = False
         self.pid = False
-        self.variations = variations
 
     def parseCigar(self, cigar):
         if self.flag & 16:
