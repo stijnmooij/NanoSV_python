@@ -173,7 +173,6 @@ def parse_bam():
             previous_cursor = line.reference_start
         if NanoSV.opts_phasing_on and line.seq and line.query_qualities and line.reference_start > previous_cursor:
             remove_variations(previous_cursor, line.reference_start, line.reference_name)
-            print("removing")
         previous_cursor = line.reference_start
         # pileup_cursor = segment.end + 1
     if NanoSV.opts_phasing_on and NanoSV.opts_snp_file:
@@ -434,7 +433,6 @@ def find_variations_md(cigartuples, chromosome, pos, qual, seq, qname, clip, md,
                         tmp_variants[pos + 1 + ref_cursor] = v.Variant(chromosome, pos + 1 + ref_cursor)
                     for segment in subsegments:
                         if segment.pos <= (pos + 1 + ref_cursor) <= segment.end:
-                            print(qual)
                             tmp_variants[pos + 1 + ref_cursor].add_segment(segment.id, [seq[read_cursor + seq_mismatch.start()], qual[read_cursor + seq_mismatch.start()]])
                             break
                         if segment.end < ref_cursor:
@@ -486,7 +484,7 @@ def remove_variations(start, end, chr):
     for position in sorted(tmp_variants):
         cov = 0
         for segment in segments_to_check:
-            if segment[0] <= position <= segment[1]:
+            if segments_to_check[segment][0] <= position <= segments_to_check[segment][1]:
                 cov += 1
         if cov < NanoSV.opts_minimum_coverage:
             continue
